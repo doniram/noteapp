@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import { ChevronRight, StickyNote } from 'lucide-react'
+import { ChevronRight, StickyNote, CloudUpload, Loader2 } from 'lucide-react'
 import { AppProvider } from './context/AppContext'
 import { useApp } from './context/useApp'
 import Sidebar from './components/Sidebar'
@@ -10,6 +10,7 @@ import TemplateModal from './components/TemplateModal'
 import FolderModal from './components/FolderModal'
 import TagModal from './components/TagModal'
 import Login from './components/Login'
+import Settings from './components/Settings'
 
 function KeyboardShortcuts() {
   const { setPaletteOpen } = useApp()
@@ -157,17 +158,51 @@ function Workspace() {
   )
 }
 
+function SyncButton() {
+  const { syncing, syncResult, syncNextcloud } = useApp()
+  return (
+    <div className="fixed bottom-4 right-4 z-20 flex flex-col items-end gap-1.5">
+      <button
+        onClick={() => syncNextcloud()}
+        disabled={syncing}
+        title="Sinkronkan semua catatan (.md) ke Nextcloud"
+        className="flex items-center gap-2 rounded-full border border-slate-800 bg-[#0d141d] px-4 py-2 text-[13px] font-medium text-slate-300 shadow-xl shadow-black/40 transition-colors hover:border-sky-700 hover:text-sky-300 disabled:opacity-60"
+      >
+        {syncing ? (
+          <Loader2 className="h-4 w-4 animate-spin" />
+        ) : (
+          <CloudUpload className="h-4 w-4" />
+        )}
+        {syncing ? 'Menyinkronkan...' : 'Sinkron'}
+      </button>
+      {syncResult && !syncing && (
+        <span
+          className={`max-w-[260px] rounded-md border px-2 py-1 text-[11px] leading-snug ${
+            syncResult.ok
+              ? 'border-emerald-800/60 bg-emerald-950/90 text-emerald-300'
+              : 'border-rose-800/60 bg-rose-950/90 text-rose-300'
+          }`}
+        >
+          {syncResult.ok ? syncResult.message : syncResult.error || syncResult.message}
+        </span>
+      )}
+    </div>
+  )
+}
+
 function AppShell() {
-  const { user, authLoading } = useApp()
+  const { user, authLoading, settingsOpen } = useApp()
   if (authLoading) return <SplashScreen />
   if (!user) return <Login />
   return (
     <>
       <KeyboardShortcuts />
       <Workspace />
+      <SyncButton />
       <TemplateModal />
       <FolderModal />
       <TagModal />
+      {settingsOpen && <Settings />}
     </>
   )
 }

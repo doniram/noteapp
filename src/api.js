@@ -75,4 +75,9 @@ export const api = {
   },
   deleteAttachment: (id) => req(`/attachments/${id}`, { method: 'DELETE' }),
   attachmentUrl: (id) => `${BASE}/attachments/${id}/download`,
+
+  getNextcloudSettings: () => req('/settings/nextcloud'),
+  saveNextcloudSettings: (cfg) => req('/settings/nextcloud', json('PUT', cfg)),
+  testNextcloud: (cfg) => req('/nextcloud/test', json('POST', cfg)),
+  syncNextcloud: () => req('/nextcloud/sync', { method: 'POST' }),
 }

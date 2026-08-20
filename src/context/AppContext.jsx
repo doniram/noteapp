@@ -29,6 +29,10 @@ export function AppProvider({ children }) {
   const [notesOpen, setNotesOpen] = useState(true)
   const [listWidth, setListWidth] = useState(384)
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [settingsOpen, setSettingsOpen] = useState(false)
+  const [nextcloud, setNextcloud] = useState(null)
+  const [syncing, setSyncing] = useState(false)
+  const [syncResult, setSyncResult] = useState(null)
   const [isMobile, setIsMobile] = useState(
     () => typeof window !== 'undefined' && window.matchMedia('(max-width: 767px)').matches
   )
@@ -95,9 +99,14 @@ export function AppProvider({ children }) {
     if (!user) return
     ;(async () => {
       try {
-        const [f, t] = await Promise.all([api.getFolders(), api.getTags()])
+        const [f, t, cfg] = await Promise.all([
+          api.getFolders(),
+          api.getTags(),
+          api.getNextcloudSettings(),
+        ])
         setFolders(f)
         setTags(t)
+        setNextcloud(cfg)
       } catch (e) {
         setError(e.message)
       } finally {
@@ -294,6 +303,29 @@ export function AppProvider({ children }) {
     setLoading(true)
   }
 
+  // ----- nextcloud / webdav -----
+  const saveNextcloud = async (cfg) => {
+    const saved = await api.saveNextcloudSettings(cfg)
+    setNextcloud(saved)
+    return saved
+  }
+
+  const testNextcloud = (cfg) => api.testNextcloud(cfg)
+
+  const syncNextcloud = async () => {
+    setSyncing(true)
+    setSyncResult(null)
+    try {
+      const res = await api.syncNextcloud()
+      setSyncResult(res)
+      return res
+    } catch (e) {
+      setSyncResult({ ok: false, error: e.message })
+    } finally {
+      setSyncing(false)
+    }
+  }
+
   const value = {
     user,
     authLoading,
@@ -342,6 +374,14 @@ export function AppProvider({ children }) {
     sidebarOpen,
     setSidebarOpen,
     isMobile,
+    settingsOpen,
+    setSettingsOpen,
+    nextcloud,
+    syncing,
+    syncResult,
+    saveNextcloud,
+    testNextcloud,
+    syncNextcloud,
     theme,
     toggleTheme,
   }

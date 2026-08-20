@@ -5,13 +5,24 @@ import bcrypt from 'bcryptjs'
 import path from 'node:path'
 import fs from 'node:fs'
 import crypto from 'node:crypto'
+import { createClient } from 'webdav'
 import { fileURLToPath } from 'node:url'
-import { db, seedAdmin, seedIfEmpty, rowToNote, buildSnippet, ftsMatch } from './db.js'
+import {
+  db,
+  seedAdmin,
+  seedIfEmpty,
+  rowToNote,
+  buildSnippet,
+  ftsMatch,
+  encryptNoteField,
+  decryptNoteField,
+} from './db.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const PORT = process.env.PORT || 4000
 const UPLOAD_DIR = process.env.UPLOAD_DIR || path.join(__dirname, 'uploads')
 const JWT_SECRET = process.env.JWT_SECRET || 'devnotes-dev-secret-change-me'
+const ENC_KEY = crypto.createHash('sha256').update(JWT_SECRET).digest()
 fs.mkdirSync(UPLOAD_DIR, { recursive: true })
 
 const app = express()
@@ -90,10 +101,6 @@ function queryNotes({ userId, search, folder, tag, sort, limit }) {
   const where = ['n.user_id = ?']
   const params = [userId]
 
-  if (search) {
-    where.push('n.rowid IN (SELECT rowid FROM notes_fts WHERE notes_fts MATCH ?)')
-    params.push(ftsMatch(search))
-  }
   if (folder === 'pinned') {
     where.push('n.pinned = 1')
   } else if (folder === 'none') {
@@ -117,9 +124,28 @@ function queryNotes({ userId, search, folder, tag, sort, limit }) {
   let sql = BASE_SELECT
   if (where.length) sql += ' WHERE ' + where.join(' AND ')
   sql += ` ORDER BY ${order}`
-  if (limit) sql += ' LIMIT ?'
 
-  const rows = limit ? db.prepare(sql).all(...params, limit) : db.prepare(sql).all(...params)
+  let rows = db.prepare(sql).all(...params)
+
+  if (search) {
+    const matchIds = new Set(
+      db
+        .prepare('SELECT rowid FROM notes_fts WHERE notes_fts MATCH ?')
+        .all(ftsMatch(search))
+        .map((r) => r.rowid)
+    )
+    const terms = String(search).toLowerCase().split(/\s+/).filter(Boolean)
+    rows = rows.filter((r) => {
+      if (matchIds.has(r.rowid)) return true
+      const sensitive = r.sensitive === 1
+      const title = sensitive ? decryptNoteField(r.title) : r.title
+      const content = sensitive ? decryptNoteField(r.content) : r.content
+      const text = `${title} ${content}`.toLowerCase()
+      return terms.every((t) => text.includes(t))
+    })
+  }
+
+  if (limit) rows = rows.slice(0, limit)
   if (!rows.length) return []
 
   const ids = rows.map((r) => r.id)
@@ -161,36 +187,82 @@ function parseNoteBody(body, existing = {}) {
   }
 }
 
+// ---------- nextcloud / webdav ----------
+function encryptSecret(plain) {
+  const iv = crypto.randomBytes(12)
+  const cipher = crypto.createCipheriv('aes-256-gcm', ENC_KEY, iv)
+  const enc = Buffer.concat([cipher.update(plain, 'utf8'), cipher.final()])
+  const tag = cipher.getAuthTag()
+  return `v1:${iv.toString('base64')}:${tag.toString('base64')}:${enc.toString('base64')}`
+}
+
+function decryptSecret(stored) {
+  if (!stored) return ''
+  const [v, ivB64, tagB64, dataB64] = String(stored).split(':')
+  if (v !== 'v1' || !ivB64 || !tagB64 || !dataB64) return ''
+  try {
+    const decipher = crypto.createDecipheriv('aes-256-gcm', ENC_KEY, Buffer.from(ivB64, 'base64'))
+    decipher.setAuthTag(Buffer.from(tagB64, 'base64'))
+    return Buffer.concat([decipher.update(Buffer.from(dataB64, 'base64')), decipher.final()]).toString(
+      'utf8'
+    )
+  } catch {
+    return ''
+  }
+}
+
+function getStoredWebdav(userId) {
+  const row = db.prepare('SELECT * FROM settings WHERE user_id = ?').get(userId)
+  if (!row) return null
+  return {
+    server: row.webdav_server,
+    username: row.webdav_username,
+    password: decryptSecret(row.webdav_password),
+    path: row.webdav_path || 'DevNotes',
+  }
+}
+
+function getStoredWebdavPublic(userId) {
+  const row = db.prepare('SELECT * FROM settings WHERE user_id = ?').get(userId)
+  return {
+    server: row?.webdav_server || '',
+    username: row?.webdav_username || '',
+    path: row?.webdav_path || 'DevNotes',
+    hasPassword: !!row?.webdav_password,
+  }
+}
+
+const davRoot = (cfg) => `${cfg.server.replace(/\/+$/, '')}/remote.php/dav/files/${cfg.username}`
+const makeWebdavClient = (cfg) =>
+  createClient(davRoot(cfg), { username: cfg.username, password: cfg.password })
+
+const sanitizeName = (s) =>
+  s
+    .split('')
+    .map((ch) => (ch.charCodeAt(0) < 32 ? ' ' : ch))
+    .join('')
+    .replace(/[\\/:*?"<>|#]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+
+function webdavConfigFrom(body, fallback = {}) {
+  return {
+    server: String(body.server ?? fallback.server ?? '').trim(),
+    username: String(body.username ?? fallback.username ?? '').trim(),
+    password: String(body.password ?? fallback.password ?? ''),
+    path:
+      String(body.path ?? fallback.path ?? 'DevNotes')
+        .trim()
+        .replace(/^\/+|\/+$/g, '') || 'DevNotes',
+  }
+}
+
 // ---------- health ----------
 app.get('/api/health', (_req, res) => res.json({ ok: true, time: new Date().toISOString() }))
 
 // ---------- auth ----------
-function validateCredentials(username, password) {
-  if (!/^[a-zA-Z0-9_]{3,20}$/.test(username)) {
-    return 'Username 3-20 karakter (huruf, angka, underscore)'
-  }
-  if (password.length < 6) return 'Password minimal 6 karakter'
-  return null
-}
-
-app.post('/api/auth/register', (req, res) => {
-  const username = String(req.body?.username ?? '').trim()
-  const password = String(req.body?.password ?? '')
-  const invalid = validateCredentials(username, password)
-  if (invalid) return res.status(400).json({ error: invalid })
-  if (db.prepare('SELECT id FROM users WHERE username = ?').get(username)) {
-    return res.status(409).json({ error: 'Username sudah dipakai' })
-  }
-  const userId = id()
-  const hash = bcrypt.hashSync(password, 10)
-  db.prepare('INSERT INTO users (id, username, password_hash, created_at) VALUES (?, ?, ?, ?)').run(
-    userId,
-    username,
-    hash,
-    new Date().toISOString()
-  )
-  seedIfEmpty(userId)
-  res.status(201).json({ token: signToken({ id: userId, username }), user: { id: userId, username } })
+app.post('/api/auth/register', (_req, res) => {
+  res.status(403).json({ error: 'Pendaftaran akun dinonaktifkan' })
 })
 
 app.post('/api/auth/login', (req, res) => {
@@ -329,9 +401,11 @@ app.post('/api/notes', (req, res) => {
   const b = parseNoteBody(req.body)
   const now = new Date().toISOString()
   const noteId = String(req.body?.id || id())
+  const title = b.sensitive ? encryptNoteField(b.title) : b.title
+  const content = b.sensitive ? encryptNoteField(b.content) : b.content
   db.prepare(
     'INSERT INTO notes (id, title, content, folder_id, pinned, sensitive, created_at, updated_at, user_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
-  ).run(noteId, b.title, b.content, b.folder_id, b.pinned, b.sensitive, now, now, req.user.id)
+  ).run(noteId, title, content, b.folder_id, b.pinned, b.sensitive, now, now, req.user.id)
   saveTags(noteId, req.body?.tags)
   res.status(201).json(getNoteById(noteId, req.user.id))
 })
@@ -342,16 +416,18 @@ app.put('/api/notes/:id', (req, res) => {
     .get(req.params.id, req.user.id)
   if (!existing) return res.status(404).json({ error: 'Catatan tidak ditemukan' })
   const b = parseNoteBody(req.body, {
-    title: existing.title,
-    content: existing.content,
+    title: existing.sensitive ? decryptNoteField(existing.title) : existing.title,
+    content: existing.sensitive ? decryptNoteField(existing.content) : existing.content,
     folderId: existing.folder_id,
     pinned: existing.pinned,
     sensitive: existing.sensitive,
   })
   const now = new Date().toISOString()
+  const title = b.sensitive ? encryptNoteField(b.title) : b.title
+  const content = b.sensitive ? encryptNoteField(b.content) : b.content
   db.prepare(
     'UPDATE notes SET title = ?, content = ?, folder_id = ?, pinned = ?, sensitive = ?, updated_at = ? WHERE id = ? AND user_id = ?'
-  ).run(b.title, b.content, b.folder_id, b.pinned, b.sensitive, now, req.params.id, req.user.id)
+  ).run(title, content, b.folder_id, b.pinned, b.sensitive, now, req.params.id, req.user.id)
   if (Array.isArray(req.body?.tags)) saveTags(req.params.id, req.body.tags)
   res.json(getNoteById(req.params.id, req.user.id))
 })
@@ -417,6 +493,120 @@ app.get('/api/attachments/:id/download', (req, res) => {
   const row = getAttachmentOwned(req, res)
   if (!row) return
   res.download(row.path, row.name)
+})
+
+// ---------- settings ----------
+app.get('/api/settings/nextcloud', (req, res) => {
+  res.json(getStoredWebdavPublic(req.user.id))
+})
+
+app.put('/api/settings/nextcloud', (req, res) => {
+  const cfg = webdavConfigFrom(req.body ?? {}, getStoredWebdav(req.user.id) ?? {})
+  if (!cfg.server || !cfg.username) {
+    return res.status(400).json({ error: 'Server dan username wajib diisi' })
+  }
+  const stored = getStoredWebdav(req.user.id)
+  const password = cfg.password || stored?.password || ''
+  db.prepare(
+    `INSERT INTO settings (user_id, webdav_server, webdav_username, webdav_password, webdav_path, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?)
+     ON CONFLICT(user_id) DO UPDATE SET
+       webdav_server = excluded.webdav_server,
+       webdav_username = excluded.webdav_username,
+       webdav_password = excluded.webdav_password,
+       webdav_path = excluded.webdav_path,
+       updated_at = excluded.updated_at`
+  ).run(req.user.id, cfg.server, cfg.username, encryptSecret(password), cfg.path, new Date().toISOString())
+  res.json(getStoredWebdavPublic(req.user.id))
+})
+
+// ---------- nextcloud test & sync ----------
+app.post('/api/nextcloud/test', async (req, res) => {
+  const stored = getStoredWebdav(req.user.id) ?? {}
+  const cfg = webdavConfigFrom(req.body ?? {}, stored)
+  if (!cfg.server || !cfg.username) {
+    return res.status(400).json({ error: 'Server dan username wajib diisi' })
+  }
+  const password = cfg.password || stored.password || ''
+  if (!password) return res.status(400).json({ error: 'Password wajib diisi' })
+  try {
+    const client = makeWebdavClient({ ...cfg, password })
+    await client.getDirectoryContents('/')
+    res.json({ ok: true, message: 'Koneksi WebDAV berhasil' })
+  } catch (e) {
+    res.status(502).json({ error: `Koneksi gagal: ${e.message}` })
+  }
+})
+
+app.post('/api/nextcloud/sync', async (req, res) => {
+  const stored = getStoredWebdav(req.user.id)
+  if (!stored || !stored.server || !stored.username || !stored.password) {
+    return res.status(400).json({ error: 'Konfigurasi WebDAV belum diatur. Buka halaman Pengaturan.' })
+  }
+  try {
+    const client = makeWebdavClient(stored)
+    const base = `/${stored.path}`
+    await client.createDirectory(base, { recursive: true })
+
+    const notes = queryNotes({
+      userId: req.user.id,
+      search: '',
+      folder: '',
+      tag: '',
+      sort: 'title',
+      limit: null,
+    })
+    const folderNames = new Map(
+      db
+        .prepare('SELECT id, name FROM folders WHERE user_id = ?')
+        .all(req.user.id)
+        .map((f) => [f.id, f.name])
+    )
+
+    const used = new Map()
+    let uploaded = 0
+    let skipped = 0
+    const failed = []
+    for (const note of notes) {
+      if (note.sensitive) {
+        skipped++
+        continue
+      }
+      let name = sanitizeName(note.title) || 'catatan'
+      name = name.slice(0, 80)
+      const key = name.toLowerCase()
+      if (used.has(key)) {
+        used.set(key, used.get(key) + 1)
+        name = `${name} (${used.get(key)})`
+      } else {
+        used.set(key, 0)
+      }
+      const folderName = note.folderId ? sanitizeName(folderNames.get(note.folderId)) : ''
+      const dir = folderName ? `${base}/${folderName}` : base
+      const remotePath = `${dir}/${name}.md`
+      try {
+        await client.putFileContents(remotePath, note.content, {
+          overwrite: true,
+          contentLength: false,
+        })
+        uploaded++
+      } catch (e) {
+        failed.push({ title: note.title, error: e.message })
+      }
+    }
+    res.json({
+      ok: true,
+      uploaded,
+      skipped,
+      failed,
+      path: base,
+      message: `Sinkron selesai: ${uploaded} file .md diunggah ke Nextcloud${
+        skipped ? `, ${skipped} catatan sensitif dilewati` : ''
+      }`,
+    })
+  } catch (e) {
+    res.status(502).json({ error: `Sinkronisasi gagal: ${e.message}` })
+  }
 })
 
 // ---------- production static ----------

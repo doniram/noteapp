@@ -15,6 +15,7 @@ import {
   Moon,
   X,
   LogOut,
+  Settings as SettingsIcon,
 } from 'lucide-react'
 import { useApp } from '../context/useApp'
 
@@ -67,6 +68,7 @@ export default function Sidebar() {
     logout,
     isMobile,
     setSidebarOpen,
+    setSettingsOpen,
   } = useApp()
 
   const closeMobile = () => {
@@ -127,6 +129,20 @@ export default function Sidebar() {
 
       {/* Nav */}
       <div className="flex-1 space-y-5 overflow-y-auto px-3 py-4">
+        {/* Templates */}
+        <section>
+          <button
+            onClick={() => {
+              setTplOpen(true)
+              closeMobile()
+            }}
+            className="group flex w-full items-center gap-2 rounded-lg border border-dashed border-slate-800 px-3 py-2.5 text-[13px] text-slate-500 transition-colors hover:border-sky-800 hover:bg-sky-500/10 hover:text-sky-300"
+          >
+            <LayoutTemplate className="h-4 w-4" />
+            <span className="font-medium">Buat dari Template</span>
+          </button>
+        </section>
+
         <nav className="space-y-0.5">
           <Row active={!activeFolder && !activeTag} onClick={selectAll}>
             <FolderOpen className="h-4 w-4 shrink-0 text-sky-400" />
@@ -251,20 +267,6 @@ export default function Sidebar() {
             <span className="font-medium">Tambah Tag</span>
           </button>
         </section>
-
-        {/* Templates */}
-        <section>
-          <button
-            onClick={() => {
-              setTplOpen(true)
-              closeMobile()
-            }}
-            className="group flex w-full items-center gap-2 rounded-lg border border-dashed border-slate-800 px-3 py-2.5 text-[13px] text-slate-500 transition-colors hover:border-sky-800 hover:bg-sky-500/10 hover:text-sky-300"
-          >
-            <LayoutTemplate className="h-4 w-4" />
-            <span className="font-medium">Buat dari Template</span>
-          </button>
-        </section>
       </div>
 
       <div className="flex items-center gap-2 border-t border-slate-800/70 px-3 py-3">
@@ -274,6 +276,13 @@ export default function Sidebar() {
           className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-slate-500 transition-colors hover:bg-white/10 hover:text-amber-400"
         >
           {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+        </button>
+        <button
+          onClick={() => setSettingsOpen(true)}
+          title="Pengaturan"
+          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-slate-500 transition-colors hover:bg-white/10 hover:text-sky-300"
+        >
+          <SettingsIcon className="h-4 w-4" />
         </button>
         <div className="min-w-0 flex-1 text-[11px] leading-tight text-slate-500">
           <div className="flex items-center gap-1 truncate text-slate-400">

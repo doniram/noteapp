@@ -64,6 +64,15 @@ CREATE TABLE IF NOT EXISTS attachments (
   created_at TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS settings (
+  user_id TEXT PRIMARY KEY,
+  webdav_server TEXT NOT NULL DEFAULT '',
+  webdav_username TEXT NOT NULL DEFAULT '',
+  webdav_password TEXT NOT NULL DEFAULT '',
+  webdav_path TEXT NOT NULL DEFAULT 'DevNotes',
+  updated_at TEXT NOT NULL
+);
+
 CREATE VIRTUAL TABLE IF NOT EXISTS notes_fts USING fts5(
   title, content,
   content='notes',
@@ -171,8 +180,8 @@ export function seedIfEmpty(userId) {
       const nid = crypto.randomUUID()
       insertNote.run(
         nid,
-        n.title,
-        n.content,
+        n.sensitive ? encryptNoteField(n.title) : n.title,
+        n.sensitive ? encryptNoteField(n.content) : n.content,
         n.folderId ? fmap.get(n.folderId) : null,
         n.pinned ? 1 : 0,
         n.sensitive ? 1 : 0,
@@ -190,14 +199,55 @@ function seedNow() {
   return new Date().toISOString()
 }
 
+const NOTE_SECRET = process.env.JWT_SECRET || 'devnotes-dev-secret-change-me'
+export const NOTE_KEY = crypto.createHash('sha256').update(`${NOTE_SECRET}:notes`).digest()
+const ENC_PREFIX = 'ENCV1:'
+
+export function encryptNoteField(plain) {
+  const iv = crypto.randomBytes(12)
+  const cipher = crypto.createCipheriv('aes-256-gcm', NOTE_KEY, iv)
+  const enc = Buffer.concat([cipher.update(String(plain ?? ''), 'utf8'), cipher.final()])
+  const tag = cipher.getAuthTag()
+  return `${ENC_PREFIX}${iv.toString('base64')}:${tag.toString('base64')}:${enc.toString('base64')}`
+}
+
+export function decryptNoteField(stored) {
+  if (typeof stored !== 'string' || !stored.startsWith(ENC_PREFIX)) return stored
+  const parts = stored.slice(ENC_PREFIX.length).split(':')
+  if (parts.length !== 3) return stored
+  try {
+    const decipher = crypto.createDecipheriv('aes-256-gcm', NOTE_KEY, Buffer.from(parts[0], 'base64'))
+    decipher.setAuthTag(Buffer.from(parts[1], 'base64'))
+    return Buffer.concat([decipher.update(Buffer.from(parts[2], 'base64')), decipher.final()]).toString(
+      'utf8'
+    )
+  } catch {
+    return stored
+  }
+}
+
+{
+  const legacy = db
+    .prepare("SELECT rowid, title, content FROM notes WHERE sensitive = 1 AND title NOT LIKE 'ENCV1:%'")
+    .all()
+  const migrate = db.prepare('UPDATE notes SET title = ?, content = ? WHERE rowid = ?')
+  const tx = db.transaction(() => {
+    for (const row of legacy) {
+      migrate.run(encryptNoteField(row.title), encryptNoteField(row.content), row.rowid)
+    }
+  })
+  tx()
+}
+
 export function rowToNote(row) {
+  const sensitive = row.sensitive === 1
   return {
     id: row.id,
-    title: row.title,
-    content: row.content,
+    title: sensitive ? decryptNoteField(row.title) : row.title,
+    content: sensitive ? decryptNoteField(row.content) : row.content,
     folderId: row.folder_id ?? null,
     pinned: row.pinned === 1,
-    sensitive: row.sensitive === 1,
+    sensitive,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   }

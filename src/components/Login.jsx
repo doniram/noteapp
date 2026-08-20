@@ -1,10 +1,9 @@
 import { useState } from 'react'
-import { StickyNote, LogIn, UserPlus, Loader2, Eye, EyeOff } from 'lucide-react'
+import { StickyNote, LogIn, Loader2, Eye, EyeOff } from 'lucide-react'
 import { useApp } from '../context/useApp'
 
 export default function Login() {
-  const { login, register } = useApp()
-  const [mode, setMode] = useState('login') // 'login' | 'register'
+  const { login } = useApp()
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [showPw, setShowPw] = useState(false)
@@ -16,8 +15,7 @@ export default function Login() {
     setError(null)
     setBusy(true)
     try {
-      if (mode === 'login') await login(username.trim(), password)
-      else await register(username.trim(), password)
+      await login(username.trim(), password)
     } catch (err) {
       setError(err.message)
     } finally {
@@ -42,31 +40,6 @@ export default function Login() {
         </div>
 
         <div className="rounded-2xl border border-slate-800 bg-[#0d141d] p-6 shadow-2xl shadow-black/40">
-          <div className="mb-5 flex rounded-lg border border-slate-800 bg-slate-900/60 p-0.5">
-            {(['login', 'register']).map((m) => (
-              <button
-                key={m}
-                type="button"
-                onClick={() => {
-                  setMode(m)
-                  setError(null)
-                }}
-                className={`flex flex-1 items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-[13px] font-medium transition-colors ${
-                  mode === m
-                    ? 'bg-sky-600 text-white shadow'
-                    : 'text-slate-500 hover:text-slate-300'
-                }`}
-              >
-                {m === 'login' ? (
-                  <LogIn className="h-3.5 w-3.5" />
-                ) : (
-                  <UserPlus className="h-3.5 w-3.5" />
-                )}
-                {m === 'login' ? 'Masuk' : 'Daftar'}
-              </button>
-            ))}
-          </div>
-
           <form onSubmit={submit} className="space-y-3">
             <div>
               <label className="mb-1 block text-[12px] font-medium text-slate-400">Username</label>
@@ -86,8 +59,8 @@ export default function Login() {
                   type={showPw ? 'text' : 'password'}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="minimal 6 karakter"
-                  autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
+                  placeholder="password"
+                  autoComplete="current-password"
                   className={inputCls + ' pr-10'}
                 />
                 <button
@@ -112,21 +85,15 @@ export default function Login() {
               className="flex w-full items-center justify-center gap-2 rounded-lg bg-sky-600 px-4 py-2.5 text-[14px] font-semibold text-white transition-colors hover:bg-sky-500 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {busy && <Loader2 className="h-4 w-4 animate-spin" />}
-              {mode === 'login' ? 'Masuk' : 'Buat Akun'}
+              <LogIn className="h-4 w-4" />
+              Masuk
             </button>
           </form>
 
-          {mode === 'login' && (
-            <p className="mt-4 text-center text-[12px] text-slate-600">
-              Akun demo: <span className="font-mono text-slate-400">admin</span> /{' '}
-              <span className="font-mono text-slate-400">admin123</span>
-            </p>
-          )}
-          {mode === 'register' && (
-            <p className="mt-4 text-center text-[12px] text-slate-600">
-              Pendaftaran otomatis membuat workspace baru.
-            </p>
-          )}
+          <p className="mt-4 text-center text-[12px] text-slate-600">
+            Akun demo: <span className="font-mono text-slate-400">admin</span> /{' '}
+            <span className="font-mono text-slate-400">admin123</span>
+          </p>
         </div>
       </div>
     </div>
