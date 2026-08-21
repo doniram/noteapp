@@ -154,11 +154,6 @@ export default function CommandPalette() {
                         <span className="truncate text-[13px] font-medium text-slate-200">
                           {highlightText(n.title, query)}
                         </span>
-                        {n.sensitive && (
-                          <span className="rounded bg-rose-500/15 px-1 py-px text-[9px] font-semibold uppercase text-rose-400">
-                            sensitive
-                          </span>
-                        )}
                       </span>
                       <span className="mt-0.5 block truncate text-[12px] text-slate-500">
                         {highlightText(firstLine, query)}

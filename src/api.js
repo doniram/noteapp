@@ -39,16 +39,23 @@ const json = (method, body) => ({
   body: JSON.stringify(body),
 })
 
+export function authedImageUrl(src) {
+  if (typeof src !== 'string' || !src.startsWith(BASE + '/attachments')) return src
+  const t = getToken()
+  return `${src}${src.includes('?') ? '&' : '?'}token=${encodeURIComponent(t || '')}`
+}
+
 export const api = {
   health: () => req('/health'),
 
-  login: (username, password) => req('/auth/login', json('POST', { username, password })),
+  login: (password) => req('/auth/login', json('POST', { password })),
   register: (username, password) => req('/auth/register', json('POST', { username, password })),
   me: () => req('/auth/me'),
 
   getFolders: () => req('/folders'),
-  createFolder: (name) => req('/folders', json('POST', { name })),
-  renameFolder: (id, name) => req(`/folders/${id}`, json('PUT', { name })),
+  createFolder: (name, icon = '') => req('/folders', json('POST', { name, icon })),
+  updateFolder: (id, data) =>
+    req(`/folders/${id}`, json('PUT', { name: data.name, icon: data.icon || '' })),
   deleteFolder: (id) => req(`/folders/${id}`, { method: 'DELETE' }),
 
   getTags: () => req('/tags'),
@@ -74,7 +81,11 @@ export const api = {
     return req(`/notes/${noteId}/attachments`, { method: 'POST', body: form })
   },
   deleteAttachment: (id) => req(`/attachments/${id}`, { method: 'DELETE' }),
-  attachmentUrl: (id) => `${BASE}/attachments/${id}/download`,
+  attachmentUrl: (id) => {
+    const t = getToken()
+    return `${BASE}/attachments/${id}/download${t ? `?token=${encodeURIComponent(t)}` : ''}`
+  },
+  attachmentRaw: (id) => `${BASE}/attachments/${id}/raw`,
 
   getNextcloudSettings: () => req('/settings/nextcloud'),
   saveNextcloudSettings: (cfg) => req('/settings/nextcloud', json('PUT', cfg)),

@@ -8,11 +8,9 @@ import {
   Download,
   FileText,
   Tag as TagIcon,
-  Shield,
   Paperclip,
   Check,
   Clock,
-  Lock,
   X,
   Bold,
   Italic,
@@ -32,6 +30,7 @@ import {
   ArrowLeft,
 } from 'lucide-react'
 import { useApp } from '../context/useApp'
+import { api } from '../api'
 import Markdown from './Markdown'
 import { exportMarkdown, exportPdf, formatRange, formatBytes } from '../lib/utils.jsx'
 
@@ -233,23 +232,6 @@ export default function Editor() {
           {note.pinned ? 'Disematkan' : 'Pin'}
         </button>
 
-        <button
-          onClick={() => updateNote(note.id, { sensitive: !note.sensitive })}
-          title="Tandai sensitif (terenkripsi)"
-          className={`flex items-center gap-1.5 rounded-md px-2 py-1 text-[12px] font-medium transition-colors ${
-            note.sensitive
-              ? 'bg-rose-500/15 text-rose-400'
-              : 'text-slate-500 hover:bg-white/5 hover:text-slate-300'
-          }`}
-        >
-          {note.sensitive ? (
-            <Lock className="h-3.5 w-3.5" />
-          ) : (
-            <Shield className="h-3.5 w-3.5" />
-          )}
-          {note.sensitive ? 'Terenkripsi' : 'Sensitive'}
-        </button>
-
         <div className="ml-auto flex items-center gap-1.5">
           <span className="flex items-center gap-1 text-[11px] text-emerald-500">
             {savedAt ? <Check className="h-3 w-3" /> : <Clock className="h-3 w-3 animate-pulse" />}
@@ -384,6 +366,23 @@ export default function Editor() {
               value={note.content}
               onChange={(e) => updateNote(note.id, { content: e.target.value })}
               onKeyDown={onKeyDown}
+              onPaste={(e) => {
+                const items = Array.from(e.clipboardData?.items || [])
+                const img = items.find((i) => i.type.startsWith('image/'))
+                if (!img) return
+                e.preventDefault()
+                const file = img.getAsFile()
+                if (!file) return
+                const ta = textareaRef.current
+                const start = ta?.selectionStart ?? note.content.length
+                const end = ta?.selectionEnd ?? start
+                addAttachment(note.id, file).then((att) => {
+                  if (!att) return
+                  const ref = `![${att.name}](${api.attachmentRaw(att.id)})`
+                  const cur = ta?.value ?? note.content
+                  updateNote(note.id, { content: cur.slice(0, start) + ref + cur.slice(end) })
+                })
+              }}
               spellCheck={false}
               placeholder="Tulis markdown di sini... (ex: ```bash, # judul, - list)"
               className="min-h-0 flex-1 w-full resize-none bg-transparent p-5 font-mono text-[13px] leading-relaxed text-slate-300 placeholder:text-slate-700 focus:outline-none"
@@ -432,7 +431,7 @@ export default function Editor() {
               key={a.id}
               className="group flex cursor-pointer items-center gap-1.5 rounded border border-slate-800 bg-slate-900/60 px-2 py-1 text-[11px] text-slate-400 transition-colors hover:border-slate-600 hover:text-slate-200"
               title="Unduh lampiran"
-              onClick={() => window.open(`/api/attachments/${a.id}/download`, '_blank')}
+              onClick={() => window.open(api.attachmentUrl(a.id), '_blank')}
             >
               <FileText className="h-3 w-3 text-sky-500" />
               {a.name}

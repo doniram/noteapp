@@ -16,12 +16,39 @@ import {
   X,
   LogOut,
   Settings as SettingsIcon,
+  Network,
+  Cloud,
+  Shield,
+  Globe,
+  HardDrive,
+  Layers,
+  Trash2,
+  Pencil,
 } from 'lucide-react'
 import { useApp } from '../context/useApp'
 
-function FolderIcon({ name }) {
-  const n = name.toLowerCase()
+const FOLDER_ICON_MAP = {
+  folder: [Folder, 'text-slate-400'],
+  server: [Server, 'text-sky-400'],
+  database: [Database, 'text-cyan-400'],
+  network: [Network, 'text-violet-400'],
+  terminal: [Terminal, 'text-rose-400'],
+  file: [FileText, 'text-amber-400'],
+  cloud: [Cloud, 'text-sky-300'],
+  shield: [Shield, 'text-emerald-400'],
+  gear: [SettingsIcon, 'text-slate-300'],
+  globe: [Globe, 'text-blue-400'],
+  drive: [HardDrive, 'text-amber-300'],
+  layers: [Layers, 'text-purple-300'],
+}
+
+function FolderIcon({ name, icon }) {
   const cls = 'h-4 w-4 shrink-0'
+  if (icon && FOLDER_ICON_MAP[icon]) {
+    const [Ic, color] = FOLDER_ICON_MAP[icon]
+    return <Ic className={`${cls} ${color}`} />
+  }
+  const n = (name || '').toLowerCase()
   if (n.includes('server') || n.includes('prod')) return <Server className={`${cls} text-sky-400`} />
   if (n.includes('db') || n.includes('database')) return <Database className={`${cls} text-cyan-400`} />
   if (n.includes('net')) return <Terminal className={`${cls} text-violet-400`} />
@@ -60,11 +87,12 @@ export default function Sidebar() {
     setPaletteOpen,
     setTplOpen,
     setFolderModal,
+    setFolderModalTarget,
+    setFolderToDelete,
     setTagModal,
     theme,
     toggleTheme,
     activeNote,
-    user,
     logout,
     isMobile,
     setSidebarOpen,
@@ -195,22 +223,51 @@ export default function Sidebar() {
                 {notes.filter((n) => !n.folderId).length}
               </span>
             </Row>
-            {folders.map((folder) => (
-              <Row
-                key={folder.id}
-                active={activeFolder === folder.id}
-                onClick={() => {
-                  setActiveFolder(folder.id)
-                  setActiveTag(null)
-                  setActiveId(null)
-                  closeMobile()
-                }}
-              >
-                <FolderIcon name={folder.name} />
-                <span className="flex-1 truncate">{folder.name}</span>
-                <span className="text-[11px] text-slate-600">{countInFolder(folder.id)}</span>
-              </Row>
-            ))}
+            {folders.map((folder) => {
+              const active = activeFolder === folder.id
+              return (
+                <div key={folder.id} className="group relative flex items-center">
+                  <button
+                    onClick={() => {
+                      setActiveFolder(folder.id)
+                      setActiveTag(null)
+                      setActiveId(null)
+                      closeMobile()
+                    }}
+                    className={`flex w-full min-w-0 items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px] transition-colors ${
+                      active
+                        ? 'bg-sky-500/15 text-sky-300'
+                        : 'text-slate-400 hover:bg-white/5 hover:text-slate-200'
+                    }`}
+                  >
+                    <FolderIcon name={folder.name} icon={folder.icon} />
+                    <span className="flex-1 truncate">{folder.name}</span>
+                    <span className="text-[11px] text-slate-600 transition-opacity group-hover:opacity-0">
+                      {countInFolder(folder.id)}
+                    </span>
+                  </button>
+                  <div className="absolute right-1 top-1/2 flex -translate-y-1/2 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
+                    <button
+                      onClick={() => {
+                        setFolderModalTarget(folder)
+                        setFolderModal(true)
+                      }}
+                      title="Ubah folder"
+                      className="rounded p-1 text-slate-500 hover:bg-white/10 hover:text-sky-300"
+                    >
+                      <Pencil className="h-3 w-3" />
+                    </button>
+                    <button
+                      onClick={() => setFolderToDelete(folder)}
+                      title="Hapus folder"
+                      className="rounded p-1 text-slate-500 hover:bg-rose-500/15 hover:text-rose-400"
+                    >
+                      <Trash2 className="h-3 w-3" />
+                    </button>
+                  </div>
+                </div>
+              )
+            })}
           </div>
         </section>
 
@@ -284,18 +341,7 @@ export default function Sidebar() {
         >
           <SettingsIcon className="h-4 w-4" />
         </button>
-        <div className="min-w-0 flex-1 text-[11px] leading-tight text-slate-500">
-          <div className="flex items-center gap-1 truncate text-slate-400">
-            <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-sky-500/20 text-[9px] font-bold text-sky-400">
-              {user?.username?.slice(0, 1).toUpperCase()}
-            </span>
-            <span className="truncate">{user?.username}</span>
-          </div>
-          <div className="text-slate-600">
-            {notes.filter((n) => n.sensitive).length} terenkripsi ·{' '}
-            {theme === 'dark' ? 'gelap' : 'terang'}
-          </div>
-        </div>
+        <div className="flex-1" />
         <button
           onClick={logout}
           title="Keluar"

@@ -84,7 +84,7 @@ ufw allow OpenSSH
   {
     id: 'template-kredensial',
     name: 'Kredensial / Akses',
-    desc: 'Simpan kredensial dasar dengan label sensitive.',
+    desc: 'Simpan kredensial dasar akses terbatas.',
     content: `# Kredensial: {Nama Sistem}
 
 > **Sensitive** — access terbatas. Jangan dishare di chat publik.
@@ -104,5 +104,14 @@ ufw allow OpenSSH
 ## Rotasi
 
 **Jadwal rotasi berikutnya:** `,
+  },
+  {
+    id: 'template-catatan-cepat',
+    name: 'Catatan Teks (Biasa)',
+    desc: 'Catatan teks polos tanpa format markdown, cocok untuk catatan bebas.',
+    content: `Catatan teks biasa...
+
+Tulis apa saja dengan bebas di sini. Tekan Enter untuk baris baru.
+`,
   },
 ]

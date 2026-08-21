@@ -1,10 +1,9 @@
 import { useState } from 'react'
-import { StickyNote, LogIn, Loader2, Eye, EyeOff } from 'lucide-react'
+import { StickyNote, LogIn, Loader2, Eye, EyeOff, KeyRound } from 'lucide-react'
 import { useApp } from '../context/useApp'
 
 export default function Login() {
   const { login } = useApp()
-  const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [showPw, setShowPw] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -15,7 +14,7 @@ export default function Login() {
     setError(null)
     setBusy(true)
     try {
-      await login(username.trim(), password)
+      await login(password)
     } catch (err) {
       setError(err.message)
     } finally {
@@ -42,25 +41,15 @@ export default function Login() {
         <div className="rounded-2xl border border-slate-800 bg-[#0d141d] p-6 shadow-2xl shadow-black/40">
           <form onSubmit={submit} className="space-y-3">
             <div>
-              <label className="mb-1 block text-[12px] font-medium text-slate-400">Username</label>
-              <input
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                placeholder="contoh: admin"
-                autoComplete="username"
-                autoFocus
-                className={inputCls}
-              />
-            </div>
-            <div>
               <label className="mb-1 block text-[12px] font-medium text-slate-400">Password</label>
               <div className="relative">
                 <input
                   type={showPw ? 'text' : 'password'}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="password"
+                  placeholder="Masukkan password"
                   autoComplete="current-password"
+                  autoFocus
                   className={inputCls + ' pr-10'}
                 />
                 <button
@@ -81,7 +70,7 @@ export default function Login() {
 
             <button
               type="submit"
-              disabled={busy || !username.trim() || !password}
+              disabled={busy || !password}
               className="flex w-full items-center justify-center gap-2 rounded-lg bg-sky-600 px-4 py-2.5 text-[14px] font-semibold text-white transition-colors hover:bg-sky-500 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {busy && <Loader2 className="h-4 w-4 animate-spin" />}
@@ -90,9 +79,9 @@ export default function Login() {
             </button>
           </form>
 
-          <p className="mt-4 text-center text-[12px] text-slate-600">
-            Akun demo: <span className="font-mono text-slate-400">admin</span> /{' '}
-            <span className="font-mono text-slate-400">admin123</span>
+          <p className="mt-4 flex items-center justify-center gap-1.5 text-center text-[12px] text-slate-600">
+            <KeyRound className="h-3.5 w-3.5" />
+            Password diatur lewat env <span className="font-mono text-slate-400">ADMIN_PASSWORD</span>
           </p>
         </div>
       </div>

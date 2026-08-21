@@ -25,6 +25,8 @@ export function AppProvider({ children }) {
   const [paletteOpen, setPaletteOpen] = useState(false)
   const [tplOpen, setTplOpen] = useState(false)
   const [folderModal, setFolderModal] = useState(false)
+  const [folderModalTarget, setFolderModalTarget] = useState(null)
+  const [folderToDelete, setFolderToDelete] = useState(null)
   const [tagModal, setTagModal] = useState(false)
   const [notesOpen, setNotesOpen] = useState(true)
   const [listWidth, setListWidth] = useState(384)
@@ -183,7 +185,6 @@ export function AppProvider({ children }) {
       folderId: folderDefault,
       tags: [],
       pinned: false,
-      sensitive: false,
       attachments: [],
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
@@ -224,13 +225,43 @@ export function AppProvider({ children }) {
     }
   }
 
-  const createFolder = async (name) => {
+  const createFolder = async (name, icon = '') => {
     setFolderModal(false)
+    setFolderModalTarget(null)
     try {
-      const folder = await api.createFolder(name)
+      const folder = await api.createFolder(name, icon)
       setFolders((prev) => [...prev, folder])
       setActiveFolder(folder.id)
       return folder
+    } catch (e) {
+      setError(e.message)
+    }
+  }
+
+  const updateFolder = async (id, data) => {
+    setFolderModal(false)
+    setFolderModalTarget(null)
+    try {
+      const folder = await api.updateFolder(id, data)
+      setFolders((prev) => prev.map((f) => (f.id === id ? folder : f)))
+      return folder
+    } catch (e) {
+      setError(e.message)
+    }
+  }
+
+  const deleteFolder = async (id) => {
+    setFolderToDelete(null)
+    try {
+      await api.deleteFolder(id)
+      setFolders((prev) => prev.filter((f) => f.id !== id))
+      setNotes((prev) => prev.map((n) => (n.folderId === id ? { ...n, folderId: null } : n)))
+      setResults((prev) => prev.map((n) => (n.folderId === id ? { ...n, folderId: null } : n)))
+      if (activeFolder === id) {
+        setActiveFolder(null)
+        setActiveTag(null)
+        setActiveId(null)
+      }
     } catch (e) {
       setError(e.message)
     }
@@ -272,8 +303,8 @@ export function AppProvider({ children }) {
   }
 
   // ----- auth -----
-  const login = async (username, password) => {
-    const res = await api.login(username, password)
+  const login = async (password) => {
+    const res = await api.login(password)
     localStorage.setItem('devnotes-token', res.token)
     setToken(res.token)
     setUser(res.user)
@@ -348,6 +379,8 @@ export function AppProvider({ children }) {
     createNoteFromTemplate,
     deleteNote,
     createFolder,
+    updateFolder,
+    deleteFolder,
     createTag,
     addAttachment,
     removeAttachment,
@@ -365,6 +398,10 @@ export function AppProvider({ children }) {
     setTplOpen,
     folderModal,
     setFolderModal,
+    folderModalTarget,
+    setFolderModalTarget,
+    folderToDelete,
+    setFolderToDelete,
     tagModal,
     setTagModal,
     notesOpen,

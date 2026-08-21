@@ -1,27 +1,19 @@
+import 'dotenv/config'
 import express from 'express'
 import multer from 'multer'
 import jwt from 'jsonwebtoken'
-import bcrypt from 'bcryptjs'
 import path from 'node:path'
 import fs from 'node:fs'
 import crypto from 'node:crypto'
 import { createClient } from 'webdav'
 import { fileURLToPath } from 'node:url'
-import {
-  db,
-  seedAdmin,
-  seedIfEmpty,
-  rowToNote,
-  buildSnippet,
-  ftsMatch,
-  encryptNoteField,
-  decryptNoteField,
-} from './db.js'
+import { db, seedAdmin, seedIfEmpty, rowToNote, buildSnippet, ftsMatch } from './db.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const PORT = process.env.PORT || 4000
 const UPLOAD_DIR = process.env.UPLOAD_DIR || path.join(__dirname, 'uploads')
 const JWT_SECRET = process.env.JWT_SECRET || 'devnotes-dev-secret-change-me'
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin123'
 const ENC_KEY = crypto.createHash('sha256').update(JWT_SECRET).digest()
 fs.mkdirSync(UPLOAD_DIR, { recursive: true })
 
@@ -39,7 +31,9 @@ const signToken = (user) =>
 
 function requireAuth(req, res, next) {
   const header = req.headers.authorization || ''
-  const token = header.startsWith('Bearer ') ? header.slice(7) : null
+  const token = header.startsWith('Bearer ')
+    ? header.slice(7)
+    : String(req.query?.token || '')
   if (!token) return res.status(401).json({ error: 'Tidak terautentikasi' })
   try {
     const payload = jwt.verify(token, JWT_SECRET)
@@ -92,7 +86,7 @@ function decorate(note, query) {
 }
 
 const BASE_SELECT = `
-  SELECT n.rowid, n.id, n.title, n.content, n.folder_id, n.pinned, n.sensitive,
+  SELECT n.rowid, n.id, n.title, n.content, n.folder_id, n.pinned,
          n.created_at, n.updated_at
   FROM notes n
 `
@@ -101,6 +95,10 @@ function queryNotes({ userId, search, folder, tag, sort, limit }) {
   const where = ['n.user_id = ?']
   const params = [userId]
 
+  if (search) {
+    where.push('n.rowid IN (SELECT rowid FROM notes_fts WHERE notes_fts MATCH ?)')
+    params.push(ftsMatch(search))
+  }
   if (folder === 'pinned') {
     where.push('n.pinned = 1')
   } else if (folder === 'none') {
@@ -124,28 +122,9 @@ function queryNotes({ userId, search, folder, tag, sort, limit }) {
   let sql = BASE_SELECT
   if (where.length) sql += ' WHERE ' + where.join(' AND ')
   sql += ` ORDER BY ${order}`
+  if (limit) sql += ' LIMIT ?'
 
-  let rows = db.prepare(sql).all(...params)
-
-  if (search) {
-    const matchIds = new Set(
-      db
-        .prepare('SELECT rowid FROM notes_fts WHERE notes_fts MATCH ?')
-        .all(ftsMatch(search))
-        .map((r) => r.rowid)
-    )
-    const terms = String(search).toLowerCase().split(/\s+/).filter(Boolean)
-    rows = rows.filter((r) => {
-      if (matchIds.has(r.rowid)) return true
-      const sensitive = r.sensitive === 1
-      const title = sensitive ? decryptNoteField(r.title) : r.title
-      const content = sensitive ? decryptNoteField(r.content) : r.content
-      const text = `${title} ${content}`.toLowerCase()
-      return terms.every((t) => text.includes(t))
-    })
-  }
-
-  if (limit) rows = rows.slice(0, limit)
+  const rows = limit ? db.prepare(sql).all(...params, limit) : db.prepare(sql).all(...params)
   if (!rows.length) return []
 
   const ids = rows.map((r) => r.id)
@@ -183,7 +162,6 @@ function parseNoteBody(body, existing = {}) {
     content: String(body.content ?? existing.content ?? ''),
     folder_id: body.folderId !== undefined ? body.folderId : existing.folderId,
     pinned: body.pinned !== undefined ? (body.pinned ? 1 : 0) : existing.pinned ? 1 : 0,
-    sensitive: body.sensitive !== undefined ? (body.sensitive ? 1 : 0) : existing.sensitive ? 1 : 0,
   }
 }
 
@@ -232,7 +210,12 @@ function getStoredWebdavPublic(userId) {
   }
 }
 
-const davRoot = (cfg) => `${cfg.server.replace(/\/+$/, '')}/remote.php/dav/files/${cfg.username}`
+const davRoot = (cfg) => {
+  let base = cfg.server.replace(/\/+$/, '')
+  if (base.includes('/remote.php/dav/files/')) return base
+  if (base.includes('/remote.php/dav')) return `${base}/files/${cfg.username}`
+  return `${base}/remote.php/dav/files/${cfg.username}`
+}
 const makeWebdavClient = (cfg) =>
   createClient(davRoot(cfg), { username: cfg.username, password: cfg.password })
 
@@ -266,15 +249,13 @@ app.post('/api/auth/register', (_req, res) => {
 })
 
 app.post('/api/auth/login', (req, res) => {
-  const username = String(req.body?.username ?? '').trim()
   const password = String(req.body?.password ?? '')
-  const row = db.prepare('SELECT * FROM users WHERE username = ?').get(username)
-  if (!row || !bcrypt.compareSync(password, row.password_hash)) {
-    return res.status(401).json({ error: 'Username atau password salah' })
+  if (!password || password !== ADMIN_PASSWORD) {
+    return res.status(401).json({ error: 'Password salah' })
   }
   res.json({
-    token: signToken({ id: row.id, username: row.username }),
-    user: { id: row.id, username: row.username },
+    token: signToken({ id: adminId, username: 'admin' }),
+    user: { id: adminId, username: 'admin' },
   })
 })
 
@@ -293,35 +274,44 @@ app.get('/api/folders', (req, res) => {
   const rows = db
     .prepare('SELECT * FROM folders WHERE user_id = ? ORDER BY created_at ASC')
     .all(req.user.id)
-  res.json(rows.map((r) => ({ id: r.id, name: r.name, createdAt: r.created_at })))
+  res.json(rows.map((r) => ({ id: r.id, name: r.name, icon: r.icon || '', createdAt: r.created_at })))
 })
 
 app.post('/api/folders', (req, res) => {
   const name = String(req.body?.name ?? '').trim()
+  const icon = String(req.body?.icon ?? '').trim()
   if (!name) return res.status(400).json({ error: 'Nama folder wajib diisi' })
   const row = {
     id: id(),
     name,
+    icon,
     created_at: new Date().toISOString(),
     user_id: req.user.id,
   }
-  db.prepare('INSERT INTO folders (id, name, user_id, created_at) VALUES (?, ?, ?, ?)').run(
+  db.prepare('INSERT INTO folders (id, name, icon, user_id, created_at) VALUES (?, ?, ?, ?, ?)').run(
     row.id,
     row.name,
+    row.icon,
     row.user_id,
     row.created_at
   )
-  res.status(201).json({ id: row.id, name: row.name, createdAt: row.created_at })
+  res.status(201).json({ id: row.id, name: row.name, icon: row.icon, createdAt: row.created_at })
 })
 
 app.put('/api/folders/:id', (req, res) => {
   const name = String(req.body?.name ?? '').trim()
+  const icon = String(req.body?.icon ?? '').trim()
   if (!name) return res.status(400).json({ error: 'Nama folder wajib diisi' })
   const r = db
-    .prepare('UPDATE folders SET name = ? WHERE id = ? AND user_id = ?')
-    .run(name, req.params.id, req.user.id)
+    .prepare('UPDATE folders SET name = ?, icon = ? WHERE id = ? AND user_id = ?')
+    .run(name, icon, req.params.id, req.user.id)
   if (!r.changes) return res.status(404).json({ error: 'Folder tidak ditemukan' })
-  res.json({ id: req.params.id, name, createdAt: db.prepare('SELECT created_at FROM folders WHERE id = ?').get(req.params.id).created_at })
+  res.json({
+    id: req.params.id,
+    name,
+    icon,
+    createdAt: db.prepare('SELECT created_at FROM folders WHERE id = ?').get(req.params.id).created_at,
+  })
 })
 
 app.delete('/api/folders/:id', (req, res) => {
@@ -401,11 +391,9 @@ app.post('/api/notes', (req, res) => {
   const b = parseNoteBody(req.body)
   const now = new Date().toISOString()
   const noteId = String(req.body?.id || id())
-  const title = b.sensitive ? encryptNoteField(b.title) : b.title
-  const content = b.sensitive ? encryptNoteField(b.content) : b.content
   db.prepare(
-    'INSERT INTO notes (id, title, content, folder_id, pinned, sensitive, created_at, updated_at, user_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
-  ).run(noteId, title, content, b.folder_id, b.pinned, b.sensitive, now, now, req.user.id)
+    'INSERT INTO notes (id, title, content, folder_id, pinned, created_at, updated_at, user_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+  ).run(noteId, b.title, b.content, b.folder_id, b.pinned, now, now, req.user.id)
   saveTags(noteId, req.body?.tags)
   res.status(201).json(getNoteById(noteId, req.user.id))
 })
@@ -416,18 +404,15 @@ app.put('/api/notes/:id', (req, res) => {
     .get(req.params.id, req.user.id)
   if (!existing) return res.status(404).json({ error: 'Catatan tidak ditemukan' })
   const b = parseNoteBody(req.body, {
-    title: existing.sensitive ? decryptNoteField(existing.title) : existing.title,
-    content: existing.sensitive ? decryptNoteField(existing.content) : existing.content,
+    title: existing.title,
+    content: existing.content,
     folderId: existing.folder_id,
     pinned: existing.pinned,
-    sensitive: existing.sensitive,
   })
   const now = new Date().toISOString()
-  const title = b.sensitive ? encryptNoteField(b.title) : b.title
-  const content = b.sensitive ? encryptNoteField(b.content) : b.content
   db.prepare(
-    'UPDATE notes SET title = ?, content = ?, folder_id = ?, pinned = ?, sensitive = ?, updated_at = ? WHERE id = ? AND user_id = ?'
-  ).run(title, content, b.folder_id, b.pinned, b.sensitive, now, req.params.id, req.user.id)
+    'UPDATE notes SET title = ?, content = ?, folder_id = ?, pinned = ?, updated_at = ? WHERE id = ? AND user_id = ?'
+  ).run(b.title, b.content, b.folder_id, b.pinned, now, req.params.id, req.user.id)
   if (Array.isArray(req.body?.tags)) saveTags(req.params.id, req.body.tags)
   res.json(getNoteById(req.params.id, req.user.id))
 })
@@ -493,6 +478,14 @@ app.get('/api/attachments/:id/download', (req, res) => {
   const row = getAttachmentOwned(req, res)
   if (!row) return
   res.download(row.path, row.name)
+})
+
+app.get('/api/attachments/:id/raw', (req, res) => {
+  const row = getAttachmentOwned(req, res)
+  if (!row) return
+  res.setHeader('Content-Disposition', 'inline')
+  res.setHeader('Cache-Control', 'no-store')
+  res.sendFile(row.path)
 })
 
 // ---------- settings ----------
@@ -565,13 +558,8 @@ app.post('/api/nextcloud/sync', async (req, res) => {
 
     const used = new Map()
     let uploaded = 0
-    let skipped = 0
     const failed = []
     for (const note of notes) {
-      if (note.sensitive) {
-        skipped++
-        continue
-      }
       let name = sanitizeName(note.title) || 'catatan'
       name = name.slice(0, 80)
       const key = name.toLowerCase()
@@ -597,12 +585,9 @@ app.post('/api/nextcloud/sync', async (req, res) => {
     res.json({
       ok: true,
       uploaded,
-      skipped,
       failed,
       path: base,
-      message: `Sinkron selesai: ${uploaded} file .md diunggah ke Nextcloud${
-        skipped ? `, ${skipped} catatan sensitif dilewati` : ''
-      }`,
+      message: `Sinkron selesai: ${uploaded} file .md diunggah ke Nextcloud`,
     })
   } catch (e) {
     res.status(502).json({ error: `Sinkronisasi gagal: ${e.message}` })
@@ -627,4 +612,7 @@ app.use((err, _req, res, _next) => {
 app.listen(PORT, () => {
   console.log(`DevNotes API running on http://localhost:${PORT}`)
   console.log(`SQLite database: ${db.name} | uploads: ${UPLOAD_DIR}`)
+  if (!process.env.ADMIN_PASSWORD) {
+    console.log('ADMIN_PASSWORD tidak diset -> memakai password default "admin123". Ubah dengan env ADMIN_PASSWORD.')
+  }
 })

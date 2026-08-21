@@ -126,6 +126,11 @@ export default function Settings() {
                   inputMode="url"
                   className={inputCls}
                 />
+                <p className="mt-1 text-[11px] text-slate-600">
+                  Cukup isi host (mis. <span className="font-mono">https://cloud.example.com</span>).
+                  Path <span className="font-mono">/remote.php/dav/files/&lt;username&gt;</span> dibuat
+                  otomatis. Kalau sudah memuat path lengkap, tetap bisa.
+                </p>
               </div>
               <div>
                 <label className="mb-1 block text-[12px] font-medium text-slate-400">Username</label>

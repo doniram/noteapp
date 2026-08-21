@@ -1,0 +1,18 @@
+services:
+  devnotes:
+    build: .
+    container_name: devnotes
+    restart: unless-stopped
+    ports:
+      - "4000:4000"
+    environment:
+      - NODE_ENV=production
+      - PORT=4000
+      - JWT_SECRET=${JWT_SECRET}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD}
+      - DB_PATH=/data/devnotes.db
+      - UPLOAD_DIR=/data/uploads
+    volumes:
+      - devnotes-data:/data
+volumes:
+  devnotes-data:

@@ -70,8 +70,17 @@ export default function NoteList() {
   return (
     <section
       style={{ width: listWidth }}
-      className="flex h-full shrink-0 flex-col border-r border-slate-800/70 bg-[#0b111a]"
+      className="relative flex h-full shrink-0 flex-col border-r border-slate-800/70 bg-[#0b111a]"
     >
+      {!isMobile && (
+        <button
+          onClick={() => setNotesOpen(false)}
+          title="Sembunyikan daftar catatan"
+          className="absolute left-1 top-1/2 z-10 -translate-y-1/2 rounded-md p-1 text-slate-600 transition-colors hover:bg-white/10 hover:text-slate-200"
+        >
+          <ChevronLeft className="h-3.5 w-3.5" />
+        </button>
+      )}
       <div className="border-b border-slate-800/70 px-4 pb-3 pt-4">
         <div className="mb-3 flex items-center gap-1">
           {isMobile && (
@@ -98,15 +107,6 @@ export default function NoteList() {
           <span className="ml-auto text-[11px] text-slate-600">
             {searching ? 'mencari…' : `${filtered.length} catatan`}
           </span>
-          {!isMobile && (
-            <button
-              onClick={() => setNotesOpen(false)}
-              title="Sembunyikan daftar catatan"
-              className="rounded p-1 text-slate-600 transition-colors hover:bg-white/10 hover:text-slate-200"
-            >
-              <ChevronLeft className="h-3.5 w-3.5" />
-            </button>
-          )}
         </div>
 
         <div className="relative">
@@ -138,7 +138,7 @@ export default function NoteList() {
         </div>
       </div>
 
-      <div className="flex-1 space-y-1 overflow-y-auto p-2">
+      <div className="flex-1 space-y-1 overflow-y-auto p-2 pl-9">
         {filtered.length === 0 && (
           <EmptyState onCreate={() => createNote()} />
         )}
@@ -172,11 +172,6 @@ export default function NoteList() {
               </p>
 
               <div className="mt-1.5 flex items-center gap-1.5">
-                {note.sensitive && (
-                  <span className="rounded bg-rose-500/15 px-1.5 py-px text-[9px] font-semibold uppercase text-rose-400">
-                    sensitive
-                  </span>
-                )}
                 {note.attachments.length > 0 && <AttachmentBadge />}
                 {note.folderId && (
                   <span className="flex items-center gap-0.5 text-[10px] text-slate-600">

@@ -315,7 +315,6 @@ Rotasi password dilakukan setiap 90 hari → **jadwal berikutnya: 12 Nov 2026**.
     folderId: 'f2',
     tags: ['t3', 't5'],
     pinned: false,
-    sensitive: true,
     createdAt: '2026-08-01T08:00:00Z',
     updatedAt: '2026-08-13T10:00:00Z',
     attachments: [],

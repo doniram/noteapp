@@ -1,4 +1,4 @@
-import { LayoutTemplate, Server, Wrench, ListChecks, KeyRound, X } from 'lucide-react'
+import { LayoutTemplate, Server, Wrench, ListChecks, KeyRound, FileText, X } from 'lucide-react'
 import Modal from './Modal'
 import { useApp } from '../context/useApp'
 import { templates } from '../data/templates'
@@ -8,6 +8,7 @@ const icons = {
   'template-troubleshooting': Wrench,
   'template-sop': ListChecks,
   'template-kredensial': KeyRound,
+  'template-catatan-cepat': FileText,
 }
 
 export default function TemplateModal() {

@@ -8,6 +8,7 @@ import Editor from './components/Editor'
 import CommandPalette from './components/CommandPalette'
 import TemplateModal from './components/TemplateModal'
 import FolderModal from './components/FolderModal'
+import DeleteFolderModal from './components/DeleteFolderModal'
 import TagModal from './components/TagModal'
 import Login from './components/Login'
 import Settings from './components/Settings'
@@ -122,7 +123,7 @@ function Workspace() {
               <ResizeHandle />
             </>
           ) : (
-            <div className="flex w-9 shrink-0 flex-col items-center border-r border-slate-800/70 bg-[#0b111a] pt-3">
+            <div className="flex w-9 shrink-0 flex-col items-center justify-center border-r border-slate-800/70 bg-[#0b111a]">
               <button
                 onClick={() => setNotesOpen(true)}
                 title="Tampilkan daftar catatan"
@@ -159,21 +160,36 @@ function Workspace() {
 }
 
 function SyncButton() {
-  const { syncing, syncResult, syncNextcloud } = useApp()
+  const { syncing, syncResult, syncNextcloud, isMobile } = useApp()
+  const expanded = isMobile || syncing
   return (
     <div className="fixed bottom-4 right-4 z-20 flex flex-col items-end gap-1.5">
       <button
         onClick={() => syncNextcloud()}
         disabled={syncing}
         title="Sinkronkan semua catatan (.md) ke Nextcloud"
-        className="flex items-center gap-2 rounded-full border border-slate-800 bg-[#0d141d] px-4 py-2 text-[13px] font-medium text-slate-300 shadow-xl shadow-black/40 transition-colors hover:border-sky-700 hover:text-sky-300 disabled:opacity-60"
+        className="group flex h-11 max-w-11 items-center justify-center gap-0 overflow-hidden rounded-full border border-slate-800 bg-[#0d141d] px-3 text-[13px] font-medium leading-none text-slate-300 shadow-lg shadow-black/40 transition-all duration-300 group-hover:max-w-[210px] group-hover:gap-2 group-hover:px-4 hover:border-sky-600 hover:bg-[#121c2b] hover:text-sky-300 disabled:opacity-60"
       >
-        {syncing ? (
-          <Loader2 className="h-4 w-4 animate-spin" />
-        ) : (
-          <CloudUpload className="h-4 w-4" />
-        )}
-        {syncing ? 'Menyinkronkan...' : 'Sinkron'}
+        <span className="relative flex h-4 w-4 shrink-0 items-center justify-center">
+          {!syncing && (
+            <span
+              className="pointer-events-none absolute -inset-2 rounded-full border-2 border-dashed border-sky-500/40 transition-opacity duration-300 group-hover:opacity-0"
+              style={{ animation: 'spin-slow 8s linear infinite' }}
+            />
+          )}
+          {syncing ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin text-sky-400" />
+          ) : (
+            <CloudUpload className="h-4 w-4" />
+          )}
+        </span>
+        <span
+          className={`whitespace-nowrap transition-all duration-300 ${
+            expanded ? 'max-w-[140px] opacity-100' : 'max-w-0 opacity-0 group-hover:max-w-[140px] group-hover:opacity-100'
+          }`}
+        >
+          {syncing ? 'Menyinkronkan...' : 'Sinkron Now'}
+        </span>
       </button>
       {syncResult && !syncing && (
         <span
@@ -201,6 +217,7 @@ function AppShell() {
       <SyncButton />
       <TemplateModal />
       <FolderModal />
+      <DeleteFolderModal />
       <TagModal />
       {settingsOpen && <Settings />}
     </>
