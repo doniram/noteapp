@@ -6,11 +6,23 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
-server/uploads
+
+# Dependencies
 node_modules
+
+# Build output
 dist
 dist-ssr
+
+# Environment
+.env
+.env.*
+!.env.example
 *.local
+
+# Database & uploads (contains user data / secrets)
+server/devnotes.db*
+server/uploads/
 
 # Editor directories and files
 .vscode/*
