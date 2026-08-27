@@ -29,10 +29,19 @@ import {
   Menu,
   ArrowLeft,
 } from 'lucide-react'
+import TurndownService from 'turndown'
+import { gfm } from 'turndown-plugin-gfm'
 import { useApp } from '../context/useApp'
 import { api } from '../api'
 import Markdown from './Markdown'
 import { exportMarkdown, exportPdf, formatRange, formatBytes } from '../lib/utils.jsx'
+
+const turndown = new TurndownService({
+  headingStyle: 'atx',
+  codeBlockStyle: 'fenced',
+  bulletListMarker: '-',
+})
+turndown.use(gfm)
 
 const MODES = ['edit', 'split', 'preview']
 
@@ -367,21 +376,29 @@ export default function Editor() {
               onChange={(e) => updateNote(note.id, { content: e.target.value })}
               onKeyDown={onKeyDown}
               onPaste={(e) => {
-                const items = Array.from(e.clipboardData?.items || [])
-                const img = items.find((i) => i.type.startsWith('image/'))
-                if (!img) return
-                e.preventDefault()
-                const file = img.getAsFile()
-                if (!file) return
+                const list = Array.from(e.clipboardData?.items || [])
+                const img = list.find((i) => i.type.startsWith('image/'))
                 const ta = textareaRef.current
                 const start = ta?.selectionStart ?? note.content.length
                 const end = ta?.selectionEnd ?? start
-                addAttachment(note.id, file).then((att) => {
-                  if (!att) return
-                  const ref = `![${att.name}](${api.attachmentRaw(att.id)})`
-                  const cur = ta?.value ?? note.content
-                  updateNote(note.id, { content: cur.slice(0, start) + ref + cur.slice(end) })
-                })
+                const cur = ta?.value ?? note.content
+                const insert = (text) =>
+                  updateNote(note.id, { content: cur.slice(0, start) + text + cur.slice(end) })
+                if (img) {
+                  e.preventDefault()
+                  const file = img.getAsFile()
+                  if (!file) return
+                  addAttachment(note.id, file).then((att) => {
+                    if (!att) return
+                    insert(`![${att.name}](${api.attachmentRaw(att.id)})`)
+                  })
+                  return
+                }
+                const html = e.clipboardData?.getData('text/html')
+                if (html) {
+                  e.preventDefault()
+                  insert(turndown.turndown(html))
+                }
               }}
               spellCheck={false}
               placeholder="Tulis markdown di sini... (ex: ```bash, # judul, - list)"

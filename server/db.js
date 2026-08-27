@@ -73,6 +73,12 @@ CREATE TABLE IF NOT EXISTS settings (
   updated_at TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS note_sync (
+  note_id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL DEFAULT '',
+  synced_at TEXT NOT NULL
+);
+
 CREATE VIRTUAL TABLE IF NOT EXISTS notes_fts USING fts5(
   title, content,
   content='notes',

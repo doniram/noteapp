@@ -1,5 +1,5 @@
-import { useEffect, useRef } from 'react'
-import { ChevronRight, StickyNote, CloudUpload, Loader2 } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { ChevronRight, StickyNote, CloudUpload, X, CheckCircle2, AlertCircle } from 'lucide-react'
 import { AppProvider } from './context/AppContext'
 import { useApp } from './context/useApp'
 import Sidebar from './components/Sidebar'
@@ -162,46 +162,88 @@ function Workspace() {
 function SyncButton() {
   const { syncing, syncResult, syncNextcloud, isMobile } = useApp()
   const expanded = isMobile || syncing
+  const [autoHide, setAutoHide] = useState(false)
+
+  useEffect(() => {
+    if (syncing || !syncResult) return
+    const t = setTimeout(() => setAutoHide(true), 7000)
+    return () => clearTimeout(t)
+  }, [syncResult, syncing])
+
+  const showResult = !syncing && !!syncResult && !autoHide
+  const resultOk = syncResult?.ok
+  const resultMessage = syncResult
+    ? syncResult.ok
+      ? syncResult.message
+      : syncResult.error || syncResult.message
+    : ''
+
+  const handleSync = () => {
+    setAutoHide(false)
+    syncNextcloud()
+  }
+
   return (
-    <div className="fixed bottom-4 right-4 z-20 flex flex-col items-end gap-1.5">
+    <div className="fixed bottom-4 right-4 z-20 flex items-center justify-end">
       <button
-        onClick={() => syncNextcloud()}
+        onClick={showResult ? () => setAutoHide(true) : handleSync}
         disabled={syncing}
         title="Sinkronkan semua catatan (.md) ke Nextcloud"
-        className="group flex h-11 max-w-11 items-center justify-center gap-0 overflow-hidden rounded-full border border-slate-800 bg-[#0d141d] px-3 text-[13px] font-medium leading-none text-slate-300 shadow-lg shadow-black/40 transition-all duration-300 group-hover:max-w-[210px] group-hover:gap-2 group-hover:px-4 hover:border-sky-600 hover:bg-[#121c2b] hover:text-sky-300 disabled:opacity-60"
+        className={`flex h-11 items-center overflow-hidden rounded-full border bg-[#0d141d] shadow-lg shadow-black/40 transition-all duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] ${
+          showResult
+            ? `min-w-11 max-w-[340px] gap-2 px-4 text-[12px] font-medium leading-snug ${
+                resultOk
+                  ? 'border-emerald-600 text-emerald-100'
+                  : 'border-rose-600 text-rose-100'
+              }`
+            : `min-w-11 text-[13px] ${syncing ? 'border-sky-700' : 'border-slate-800'} ${
+                expanded && !syncing
+                  ? 'max-w-[340px] justify-center gap-2 px-4'
+                  : 'max-w-11 justify-center'
+              }`
+        }`}
       >
-        <span className="relative flex h-4 w-4 shrink-0 items-center justify-center">
-          {!syncing && (
+        {showResult ? (
+          <>
+            <span className="shrink-0">
+              {resultOk ? (
+                <CheckCircle2 className="h-4 w-4 text-emerald-400" />
+              ) : (
+                <AlertCircle className="h-4 w-4 text-rose-400" />
+              )}
+            </span>
+            <span className="min-w-0 flex-1 truncate">{resultMessage}</span>
             <span
-              className="pointer-events-none absolute -inset-2 rounded-full border-2 border-dashed border-sky-500/40 transition-opacity duration-300 group-hover:opacity-0"
-              style={{ animation: 'spin-slow 8s linear infinite' }}
-            />
-          )}
-          {syncing ? (
-            <Loader2 className="h-3.5 w-3.5 animate-spin text-sky-400" />
-          ) : (
-            <CloudUpload className="h-4 w-4" />
-          )}
-        </span>
-        <span
-          className={`whitespace-nowrap transition-all duration-300 ${
-            expanded ? 'max-w-[140px] opacity-100' : 'max-w-0 opacity-0 group-hover:max-w-[140px] group-hover:opacity-100'
-          }`}
-        >
-          {syncing ? 'Menyinkronkan...' : 'Sinkron Now'}
-        </span>
+              role="button"
+              tabIndex={0}
+              onClick={(e) => {
+                e.stopPropagation()
+                setAutoHide(true)
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') setAutoHide(true)
+              }}
+              title="Tutup"
+              className="-mr-1 shrink-0 rounded p-1 text-slate-400 transition-colors hover:text-white"
+            >
+              <X className="h-3.5 w-3.5" />
+            </span>
+          </>
+        ) : (
+          <>
+            <span className="relative flex h-4 w-4 shrink-0 items-center justify-center">
+              <span
+                className={`pointer-events-none absolute -inset-2 rounded-full border-2 border-dashed ${
+                  syncing ? 'animate-spin border-sky-500/70' : 'border-sky-500/40'
+                }`}
+                style={!syncing ? { animation: 'spin-slow 8s linear infinite' } : undefined}
+              />
+              <CloudUpload className={`h-4 w-4 ${syncing ? 'animate-pulse text-sky-400' : ''}`} />
+            </span>
+            {expanded && !syncing && <span className="whitespace-nowrap">Sinkron Now</span>}
+          </>
+        )}
       </button>
-      {syncResult && !syncing && (
-        <span
-          className={`max-w-[260px] rounded-md border px-2 py-1 text-[11px] leading-snug ${
-            syncResult.ok
-              ? 'border-emerald-800/60 bg-emerald-950/90 text-emerald-300'
-              : 'border-rose-800/60 bg-rose-950/90 text-rose-300'
-          }`}
-        >
-          {syncResult.ok ? syncResult.message : syncResult.error || syncResult.message}
-        </span>
-      )}
     </div>
   )
 }

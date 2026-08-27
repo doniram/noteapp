@@ -77,6 +77,9 @@ Aplikasi akan tersedia di `http://localhost:PORT` (default `4000`) — satu port
 | `PORT` | tidak | `4000` | Port untuk server & aplikasi |
 | `JWT_SECRET` | **ya** | (tidak aman) | Kunci penandatanganan JWT & enkripsi password WebDAV. **Wajib diset nilai acak kuat di produksi.** |
 | `ADMIN_PASSWORD` | **ya** | `admin123` | Password login aplikasi (satu pengguna). **Segera ganti di produksi.** |
+| `LOGIN_RATE_MAX` | tidak | `10` | Maksimal percobaan login per jendela waktu (per IP). |
+| `LOGIN_RATE_WINDOW_MIN` | tidak | `15` | Jendela waktu rate-limit login (menit). |
+| `TRUST_PROXY` | tidak | `0` | Set `1` jika di belakang reverse-proxy (nginx/Caddy) agar rate-limit membaca IP pengunjung asli. |
 | `DB_PATH` | tidak | `server/devnotes.db` | Path file database SQLite |
 | `UPLOAD_DIR` | tidak | `server/uploads` | Folder penyimpanan lampiran |
 

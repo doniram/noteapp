@@ -214,6 +214,12 @@ export function AppProvider({ children }) {
     return note
   }
 
+  const importMarkdown = async (title, content) => {
+    const note = await createNote({ title, content })
+    setTplOpen(false)
+    return note
+  }
+
   const deleteNote = async (id) => {
     setNotes((prev) => prev.filter((n) => n.id !== id))
     setResults((prev) => prev.filter((n) => n.id !== id))
@@ -377,6 +383,7 @@ export function AppProvider({ children }) {
     updateNote,
     createNote,
     createNoteFromTemplate,
+    importMarkdown,
     deleteNote,
     createFolder,
     updateFolder,

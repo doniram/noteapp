@@ -79,10 +79,7 @@ export default function Login() {
             </button>
           </form>
 
-          <p className="mt-4 flex items-center justify-center gap-1.5 text-center text-[12px] text-slate-600">
-            <KeyRound className="h-3.5 w-3.5" />
-            Password diatur lewat env <span className="font-mono text-slate-400">ADMIN_PASSWORD</span>
-          </p>
+          
         </div>
       </div>
     </div>

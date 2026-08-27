@@ -1,5 +1,6 @@
 import 'dotenv/config'
 import express from 'express'
+import rateLimit from 'express-rate-limit'
 import multer from 'multer'
 import jwt from 'jsonwebtoken'
 import path from 'node:path'
@@ -18,7 +19,19 @@ const ENC_KEY = crypto.createHash('sha256').update(JWT_SECRET).digest()
 fs.mkdirSync(UPLOAD_DIR, { recursive: true })
 
 const app = express()
+app.set('trust proxy', process.env.TRUST_PROXY === '1' ? 1 : false)
 app.use(express.json({ limit: '10mb' }))
+
+const LOGIN_MAX = Number(process.env.LOGIN_RATE_MAX || 10)
+const LOGIN_WINDOW = Number(process.env.LOGIN_RATE_WINDOW_MIN || 15) * 60 * 1000
+const loginLimiter = rateLimit({
+  windowMs: LOGIN_WINDOW,
+  max: LOGIN_MAX,
+  standardHeaders: true,
+  legacyHeaders: false,
+  skipSuccessfulRequests: true,
+  message: { error: 'Terlalu banyak percobaan login. Coba lagi dalam beberapa menit.' },
+})
 
 const adminId = seedAdmin()
 seedIfEmpty(adminId)
@@ -248,7 +261,7 @@ app.post('/api/auth/register', (_req, res) => {
   res.status(403).json({ error: 'Pendaftaran akun dinonaktifkan' })
 })
 
-app.post('/api/auth/login', (req, res) => {
+app.post('/api/auth/login', loginLimiter, (req, res) => {
   const password = String(req.body?.password ?? '')
   if (!password || password !== ADMIN_PASSWORD) {
     return res.status(401).json({ error: 'Password salah' })
@@ -474,17 +487,26 @@ app.delete('/api/attachments/:id', (req, res) => {
   res.json({ ok: true })
 })
 
+const INLINE_IMAGE_TYPES = ['png', 'jpg', 'jpeg', 'gif', 'webp', 'avif', 'bmp']
+
 app.get('/api/attachments/:id/download', (req, res) => {
   const row = getAttachmentOwned(req, res)
   if (!row) return
+  res.setHeader('X-Content-Type-Options', 'nosniff')
   res.download(row.path, row.name)
 })
 
 app.get('/api/attachments/:id/raw', (req, res) => {
   const row = getAttachmentOwned(req, res)
   if (!row) return
-  res.setHeader('Content-Disposition', 'inline')
-  res.setHeader('Cache-Control', 'no-store')
+  const type = String(row.type || '').toLowerCase()
+  res.setHeader('X-Content-Type-Options', 'nosniff')
+  if (INLINE_IMAGE_TYPES.includes(type)) {
+    res.setHeader('Content-Disposition', 'inline')
+    res.setHeader('Cache-Control', 'no-store')
+  } else {
+    res.setHeader('Content-Disposition', 'attachment')
+  }
   res.sendFile(row.path)
 })
 
@@ -557,9 +579,26 @@ app.post('/api/nextcloud/sync', async (req, res) => {
     )
 
     const used = new Map()
+    const createdDirs = new Set([base])
+    const syncedMap = new Map(
+      db
+        .prepare('SELECT note_id, synced_at FROM note_sync WHERE user_id = ?')
+        .all(req.user.id)
+        .map((r) => [r.note_id, r.synced_at])
+    )
+    const upsertSync = db.prepare(
+      `INSERT INTO note_sync (note_id, user_id, synced_at) VALUES (?, ?, ?)
+       ON CONFLICT(note_id) DO UPDATE SET synced_at = excluded.synced_at`
+    )
     let uploaded = 0
+    let skipped = 0
     const failed = []
     for (const note of notes) {
+      const lastSync = syncedMap.get(note.id)
+      if (lastSync && note.updatedAt <= lastSync) {
+        skipped++
+        continue
+      }
       let name = sanitizeName(note.title) || 'catatan'
       name = name.slice(0, 80)
       const key = name.toLowerCase()
@@ -573,10 +612,15 @@ app.post('/api/nextcloud/sync', async (req, res) => {
       const dir = folderName ? `${base}/${folderName}` : base
       const remotePath = `${dir}/${name}.md`
       try {
+        if (!createdDirs.has(dir)) {
+          await client.createDirectory(dir, { recursive: true })
+          createdDirs.add(dir)
+        }
         await client.putFileContents(remotePath, note.content, {
           overwrite: true,
           contentLength: false,
         })
+        upsertSync.run(note.id, req.user.id, note.updatedAt)
         uploaded++
       } catch (e) {
         failed.push({ title: note.title, error: e.message })
@@ -585,9 +629,10 @@ app.post('/api/nextcloud/sync', async (req, res) => {
     res.json({
       ok: true,
       uploaded,
+      skipped,
       failed,
       path: base,
-      message: `Sinkron selesai: ${uploaded} file .md diunggah ke Nextcloud`,
+      message: `Sinkron selesai: ${uploaded} file diunggah ke Nextcloud`,
     })
   } catch (e) {
     res.status(502).json({ error: `Sinkronisasi gagal: ${e.message}` })

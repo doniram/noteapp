@@ -1,4 +1,5 @@
-import { LayoutTemplate, Server, Wrench, ListChecks, KeyRound, FileText, X } from 'lucide-react'
+import { useRef, useState } from 'react'
+import { LayoutTemplate, Server, Wrench, ListChecks, KeyRound, FileText, Upload, X } from 'lucide-react'
 import Modal from './Modal'
 import { useApp } from '../context/useApp'
 import { templates } from '../data/templates'
@@ -12,9 +13,30 @@ const icons = {
 }
 
 export default function TemplateModal() {
-  const { tplOpen, setTplOpen, createNoteFromTemplate } = useApp()
+  const { tplOpen, setTplOpen, createNoteFromTemplate, importMarkdown } = useApp()
+  const [importing, setImporting] = useState(false)
+  const fileRef = useRef(null)
 
   if (!tplOpen) return null
+
+  const titleFromFile = (name) =>
+    name
+      .replace(/\.(md|markdown|txt)$/i, '')
+      .replace(/[-_]+/g, ' ')
+      .trim()
+
+  const onFile = async (e) => {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    setImporting(true)
+    try {
+      const text = await file.text()
+      await importMarkdown(titleFromFile(file.name) || 'Catatan Import', text)
+    } finally {
+      setImporting(false)
+    }
+  }
 
   return (
     <Modal onClose={() => setTplOpen(false)} width="max-w-2xl">
@@ -31,7 +53,27 @@ export default function TemplateModal() {
         </button>
       </div>
 
+      <input ref={fileRef} type="file" accept=".md,.markdown,.txt,text/markdown" className="hidden" onChange={onFile} />
+
       <div className="grid grid-cols-1 gap-3 p-5 sm:grid-cols-2">
+        <button
+          onClick={() => fileRef.current?.click()}
+          disabled={importing}
+          className="group flex flex-col justify-center gap-2 rounded-xl border border-dashed border-sky-800 bg-sky-500/5 p-4 text-left transition-all hover:border-sky-600 hover:bg-sky-500/15 disabled:opacity-60"
+        >
+          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-sky-500/20">
+            <Upload className="h-4.5 w-4.5 text-sky-400" />
+          </div>
+          <div>
+            <div className="text-[13px] font-semibold text-sky-200">
+              {importing ? 'Mengimpor...' : 'Import file .md'}
+            </div>
+            <div className="mt-0.5 text-[12px] leading-snug text-slate-500">
+              Buka file markdown (.md) dan jadikan catatan baru.
+            </div>
+          </div>
+        </button>
+
         {templates.map((t) => {
           const Icon = icons[t.id] || LayoutTemplate
           return (
