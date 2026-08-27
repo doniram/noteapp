@@ -1,5 +1,13 @@
 import { useEffect, useRef, useState } from 'react'
-import { ChevronRight, StickyNote, CloudUpload, X, CheckCircle2, AlertCircle } from 'lucide-react'
+import {
+  ChevronRight,
+  StickyNote,
+  CloudUpload,
+  X,
+  CheckCircle2,
+  AlertCircle,
+  LogOut,
+} from 'lucide-react'
 import { AppProvider } from './context/AppContext'
 import { useApp } from './context/useApp'
 import Sidebar from './components/Sidebar'
@@ -248,6 +256,33 @@ function SyncButton() {
   )
 }
 
+function SessionTimeoutModal() {
+  const { sessionExpiring, sessionCountdown, continueSession } = useApp()
+  if (!sessionExpiring) return null
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+      <div className="flex w-full max-w-sm flex-col items-center gap-4 overflow-hidden rounded-xl border border-amber-700/60 bg-[#0d141d] px-6 py-6 text-center shadow-2xl shadow-black/60">
+        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-amber-500/15">
+          <LogOut className="h-6 w-6 text-amber-400" />
+        </div>
+        <div>
+          <h2 className="text-base font-semibold text-white">Sesi akan berakhir</h2>
+          <p className="mt-1 text-[13px] leading-relaxed text-slate-400">
+            Tidak ada aktivitas deteksi. Logout otomatis dalam{' '}
+            <span className="font-semibold text-amber-400">{sessionCountdown}</span> detik.
+          </p>
+        </div>
+        <button
+          onClick={continueSession}
+          className="w-full rounded-lg bg-sky-500 py-2.5 text-sm font-medium text-white transition-colors hover:bg-sky-400"
+        >
+          Lanjutkan Sesi
+        </button>
+      </div>
+    </div>
+  )
+}
+
 function AppShell() {
   const { user, authLoading, settingsOpen } = useApp()
   if (authLoading) return <SplashScreen />
@@ -262,6 +297,7 @@ function AppShell() {
       <DeleteFolderModal />
       <TagModal />
       {settingsOpen && <Settings />}
+      <SessionTimeoutModal />
     </>
   )
 }

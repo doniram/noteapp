@@ -4,6 +4,9 @@ import { uid } from '../lib/utils.jsx'
 
 const AppContext = createContext(null)
 
+const SESSION_IDLE_MINUTES = Number(import.meta.env.VITE_SESSION_IDLE_MINUTES || 15)
+const SESSION_WARN_SECONDS = 30
+
 export function AppProvider({ children }) {
   const [user, setUser] = useState(null)
   const [authLoading, setAuthLoading] = useState(
@@ -45,6 +48,10 @@ export function AppProvider({ children }) {
       return 'dark'
     }
   })
+
+  const [sessionExpiring, setSessionExpiring] = useState(false)
+  const [sessionCountdown, setSessionCountdown] = useState(SESSION_WARN_SECONDS)
+  const markActiveRef = useRef(null)
 
   const toggleTheme = () => setTheme((t) => (t === 'dark' ? 'light' : 'dark'))
 
@@ -338,7 +345,73 @@ export function AppProvider({ children }) {
     setSearching(false)
     setError(null)
     setLoading(true)
+    setSessionExpiring(false)
+    setSessionCountdown(SESSION_WARN_SECONDS)
   }
+
+  // ----- auto logout saat tidak ada aktivitas (idle timeout) -----
+  useEffect(() => {
+    if (!user) {
+      markActiveRef.current = null
+      return undefined
+    }
+    const IDLE_MS = SESSION_IDLE_MINUTES * 60 * 1000
+    let lastActivity = Date.now()
+    let checkTimer = null
+    let countdownTimer = null
+    let expiring = false
+
+    const stopCountdown = () => {
+      clearInterval(countdownTimer)
+      countdownTimer = null
+      setSessionExpiring(false)
+      setSessionCountdown(SESSION_WARN_SECONDS)
+    }
+
+    const markActive = () => {
+      lastActivity = Date.now()
+      if (expiring) {
+        expiring = false
+        stopCountdown()
+      }
+    }
+
+    const startCountdown = () => {
+      expiring = true
+      setSessionExpiring(true)
+      let remaining = SESSION_WARN_SECONDS
+      setSessionCountdown(remaining)
+      countdownTimer = setInterval(() => {
+        remaining -= 1
+        if (remaining <= 0) {
+          clearInterval(countdownTimer)
+          clearInterval(checkTimer)
+          logout()
+          return
+        }
+        setSessionCountdown(remaining)
+      }, 1000)
+    }
+
+    const check = () => {
+      if (expiring) return
+      if (Date.now() - lastActivity >= IDLE_MS) startCountdown()
+    }
+
+    markActiveRef.current = markActive
+    checkTimer = setInterval(check, 1000)
+    const events = ['mousemove', 'mousedown', 'keydown', 'touchstart', 'scroll', 'wheel']
+    events.forEach((e) => window.addEventListener(e, markActive, { passive: true }))
+
+    return () => {
+      clearInterval(checkTimer)
+      clearInterval(countdownTimer)
+      markActiveRef.current = null
+      events.forEach((e) => window.removeEventListener(e, markActive))
+    }
+  }, [user])
+
+  const continueSession = () => markActiveRef.current?.()
 
   // ----- nextcloud / webdav -----
   const saveNextcloud = async (cfg) => {
@@ -428,6 +501,9 @@ export function AppProvider({ children }) {
     syncNextcloud,
     theme,
     toggleTheme,
+    sessionExpiring,
+    sessionCountdown,
+    continueSession,
   }
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>
