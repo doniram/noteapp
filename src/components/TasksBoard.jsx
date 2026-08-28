@@ -261,7 +261,7 @@ export default function TasksBoard() {
   }
 
   return (
-    <div className="flex h-full flex-col bg-[#0b111a]">
+    <div className="flex min-w-0 flex-1 flex-col bg-[#0b111a]">
       <div className="flex items-center gap-3 border-b border-slate-800/70 px-5 py-3.5">
         <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-sky-500/15">
           <ListTodo className="h-4 w-4 text-sky-300" />
