@@ -38,13 +38,14 @@ function KeyboardShortcuts() {
 }
 
 function SplashScreen() {
+  const { t } = useApp()
   return (
     <div className="flex h-full items-center justify-center bg-[#0b0f14]">
       <div className="flex items-center gap-3 text-slate-400">
         <div className="flex h-10 w-10 animate-pulse items-center justify-center rounded-xl bg-gradient-to-br from-sky-500 to-indigo-600">
           <StickyNote className="h-5 w-5 text-white" />
         </div>
-        <span className="text-sm font-medium">Memuat...</span>
+        <span className="text-sm font-medium">{t('common.loading')}</span>
       </div>
     </div>
   )
@@ -102,6 +103,7 @@ function Workspace() {
     setSidebarOpen,
     activeId,
     view,
+    t,
   } = useApp()
   if (view === 'tasks') {
     return (
@@ -171,7 +173,7 @@ function Workspace() {
       {loading && !error && (
         <div className="fixed bottom-4 right-4 z-40 flex items-center gap-2 rounded-lg border border-slate-800 bg-[#0d141d] px-3 py-2 text-[12px] text-slate-400 shadow-xl shadow-black/30">
           <span className="h-2 w-2 animate-pulse rounded-full bg-sky-400" />
-          Menghubungkan ke server…
+          {t('app.connect')}
         </div>
       )}
       {error && (
@@ -190,7 +192,7 @@ function Workspace() {
 }
 
 function SyncButton() {
-  const { syncing, syncResult, syncNextcloud, isMobile } = useApp()
+  const { syncing, syncResult, syncNextcloud, isMobile, t } = useApp()
   const expanded = isMobile || syncing
   const [autoHide, setAutoHide] = useState(false)
 
@@ -270,7 +272,7 @@ function SyncButton() {
               />
               <CloudUpload className={`h-4 w-4 ${syncing ? 'animate-pulse text-sky-400' : ''}`} />
             </span>
-            {expanded && !syncing && <span className="whitespace-nowrap">Sinkron Now</span>}
+            {expanded && !syncing && <span className="whitespace-nowrap">{t('settings.syncNow')}</span>}
           </>
         )}
       </button>
@@ -279,7 +281,7 @@ function SyncButton() {
 }
 
 function SessionTimeoutModal() {
-  const { sessionExpiring, sessionCountdown, continueSession } = useApp()
+  const { sessionExpiring, sessionCountdown, continueSession, t } = useApp()
   if (!sessionExpiring) return null
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
@@ -288,17 +290,18 @@ function SessionTimeoutModal() {
           <LogOut className="h-6 w-6 text-amber-400" />
         </div>
         <div>
-          <h2 className="text-base font-semibold text-white">Sesi akan berakhir</h2>
+          <h2 className="text-base font-semibold text-white">{t('session.title')}</h2>
           <p className="mt-1 text-[13px] leading-relaxed text-slate-400">
-            Tidak ada aktivitas deteksi. Logout otomatis dalam{' '}
-            <span className="font-semibold text-amber-400">{sessionCountdown}</span> detik.
+            {t('session.desc')}{' '}
+            <span className="font-semibold text-amber-400">{sessionCountdown}</span>{' '}
+            {t('session.seconds')}
           </p>
         </div>
         <button
           onClick={continueSession}
           className="w-full rounded-lg bg-sky-500 py-2.5 text-sm font-medium text-white transition-colors hover:bg-sky-400"
         >
-          Lanjutkan Sesi
+          {t('session.continue')}
         </button>
       </div>
     </div>

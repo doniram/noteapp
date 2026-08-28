@@ -13,10 +13,11 @@ function getSearchSnippet(note, query, maxLen = 130) {
 }
 
 function AttachmentBadge() {
+  const { t } = useApp()
   return (
     <span className="flex items-center gap-1 text-[10px] text-slate-600">
       <Paperclip className="h-3 w-3" />
-      file
+      {t('note.file')}
     </span>
   )
 }
@@ -43,23 +44,24 @@ export default function NoteList() {
     listWidth,
     isMobile,
     setSidebarOpen,
+    t,
   } = useApp()
 
   const folderName =
     activeFolder === 'pinned'
-      ? 'Disematkan'
+      ? t('side.pinned')
       : activeFolder === 'none'
-        ? 'Tanpa folder'
+        ? t('common.noFolder')
         : folders.find((f) => f.id === activeFolder)?.name
   const tagName = tags.find((t) => t.id === activeTag)?.name
 
   const filtered = results
 
   const heading = search
-    ? `Hasil pencarian: "${search}"`
+    ? t('note.searchResults', { q: search })
     : activeTag
-      ? `Tag #${tagName}`
-      : folderName || 'Semua Catatan'
+      ? t('note.tag', { name: tagName })
+      : folderName || t('note.allNotes')
 
   const clearFilter = () => {
     setSearch('')
@@ -105,7 +107,7 @@ export default function NoteList() {
             )}
           </h2>
           <span className="ml-auto text-[11px] text-slate-600">
-            {searching ? 'mencari…' : `${filtered.length} catatan`}
+            {searching ? t('note.searching') : t('note.count', { n: filtered.length })}
           </span>
         </div>
 
@@ -114,7 +116,7 @@ export default function NoteList() {
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Cari di semua catatan..."
+            placeholder={t('note.searchPlaceholder')}
             className="w-full rounded-lg border border-slate-800 bg-slate-900/70 py-1.5 pl-8 pr-3 text-[13px] text-slate-200 placeholder:text-slate-600 focus:border-sky-700 focus:outline-none"
           />
         </div>
@@ -127,13 +129,13 @@ export default function NoteList() {
             className="flex items-center gap-1 rounded border border-slate-800 px-1.5 py-0.5 hover:border-slate-600 hover:text-slate-300"
           >
             <ArrowUpDown className="h-3 w-3" />
-            {sort === 'updated' ? 'Diubah' : sort === 'created' ? 'Dibuat' : 'Judul'}
+            {sort === 'updated' ? t('note.sortUpdated') : sort === 'created' ? t('note.sortCreated') : t('note.sortTitle')}
           </button>
           <button
             onClick={() => setTplOpen(true)}
             className="flex items-center gap-1 rounded border border-slate-800 px-1.5 py-0.5 hover:border-sky-700 hover:text-sky-300"
           >
-            <Plus className="h-3 w-3" /> Template
+            <Plus className="h-3 w-3" /> {t('note.template')}
           </button>
         </div>
       </div>
@@ -213,22 +215,21 @@ export default function NoteList() {
 }
 
 function EmptyState({ onCreate }) {
+  const { t } = useApp()
   return (
     <div className="flex flex-col items-center gap-3 px-4 py-16 text-center">
       <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-800/60">
         <Search className="h-5 w-5 text-slate-600" />
       </div>
       <div>
-        <div className="text-[13px] font-medium text-slate-300">Tidak ada hasil</div>
-        <div className="mt-0.5 text-[12px] text-slate-600">
-          Coba kata kunci lain, atau buat catatan baru.
-        </div>
+        <div className="text-[13px] font-medium text-slate-300">{t('note.noResults')}</div>
+        <div className="mt-0.5 text-[12px] text-slate-600">{t('note.noResultsHint')}</div>
       </div>
       <button
         onClick={onCreate}
         className="rounded-lg bg-sky-600 px-3 py-1.5 text-[12px] font-medium text-white transition-colors hover:bg-sky-500"
       >
-        + Catatan Baru
+        {t('note.newNote')}
       </button>
     </div>
   )

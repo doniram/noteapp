@@ -6,7 +6,7 @@ import { useApp } from '../context/useApp'
 const COLORS = ['#22c55e', '#eab308', '#38bdf8', '#ef4444', '#a78bfa', '#f472b6', '#f97316', '#14b8a6']
 
 export default function TagModal() {
-  const { tagModal, setTagModal, createTag, tags } = useApp()
+  const { tagModal, setTagModal, createTag, tags, t } = useApp()
   const [name, setName] = useState('')
   const [color, setColor] = useState(COLORS[0])
 
@@ -32,7 +32,7 @@ export default function TagModal() {
         <div className="flex items-center justify-between border-b border-slate-800 px-5 py-3.5">
           <div className="flex items-center gap-2">
             <Tag className="h-4 w-4 text-sky-400" />
-            <h3 className="text-[15px] font-semibold text-slate-100">Tag baru</h3>
+            <h3 className="text-[15px] font-semibold text-slate-100">{t('tag.new')}</h3>
           </div>
           <button
             type="button"
@@ -46,7 +46,7 @@ export default function TagModal() {
         <div className="space-y-4 p-5">
           <div>
             <label className="mb-1.5 block text-[12px] font-medium text-slate-400">
-              Nama tag <span className="text-slate-600">({tags.length} tag)</span>
+              {t('tag.name')} <span className="text-slate-600">{t('tag.count', { n: tags.length })}</span>
             </label>
             <div className="flex items-center gap-2 rounded-lg border border-slate-800 bg-slate-900/60 px-3 py-2 focus-within:border-sky-700">
               <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: color }} />
@@ -54,19 +54,19 @@ export default function TagModal() {
                 autoFocus
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="misal: nginx, ubuntu, database"
+                placeholder={t('tag.placeholder')}
                 className="w-full bg-transparent text-[14px] text-slate-200 placeholder:text-slate-600 focus:outline-none"
               />
             </div>
             {existing && (
               <div className="mt-1.5 text-[11px] text-amber-400">
-                Tag #{existing.name} sudah ada.
+                {t('tag.exists', { name: existing.name })}
               </div>
             )}
           </div>
 
           <div>
-            <label className="mb-1.5 block text-[12px] font-medium text-slate-400">Warna</label>
+            <label className="mb-1.5 block text-[12px] font-medium text-slate-400">{t('tasks.color')}</label>
             <div className="flex flex-wrap gap-2">
               {COLORS.map((c) => (
                 <button
@@ -92,14 +92,14 @@ export default function TagModal() {
             onClick={() => setTagModal(false)}
             className="rounded-lg px-3 py-1.5 text-[13px] text-slate-400 hover:bg-white/5 hover:text-slate-200"
           >
-            Batal
+            {t('common.cancel')}
           </button>
           <button
             type="submit"
             disabled={!name.trim() || !!existing}
             className="rounded-lg bg-sky-600 px-4 py-1.5 text-[13px] font-medium text-white transition-colors hover:bg-sky-500 disabled:cursor-not-allowed disabled:opacity-40"
           >
-            Buat tag
+            {t('tag.create')}
           </button>
         </div>
       </form>

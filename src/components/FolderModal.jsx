@@ -42,6 +42,7 @@ export default function FolderModal() {
     updateFolder,
     folderModalTarget,
     folders,
+    t,
   } = useApp()
 
   const editing = !!folderModalTarget
@@ -69,7 +70,7 @@ export default function FolderModal() {
               <FolderPlus className="h-4 w-4 text-sky-400" />
             )}
             <h3 className="text-[15px] font-semibold text-slate-100">
-              {editing ? 'Ubah folder' : 'Folder baru'}
+              {editing ? t('folder.edit') : t('folder.new')}
             </h3>
           </div>
           <button
@@ -83,7 +84,8 @@ export default function FolderModal() {
 
         <div className="p-5">
           <label className="mb-1.5 block text-[12px] font-medium text-slate-400">
-            Nama folder <span className="text-slate-600">({folders.length} folder)</span>
+            {t('folder.name')}{' '}
+            <span className="text-slate-600">{t('folder.count', { n: folders.length })}</span>
           </label>
           <div className="flex items-center gap-2 rounded-lg border border-slate-800 bg-slate-900/60 px-3 py-2 focus-within:border-sky-700">
             <Folder className="h-4 w-4 text-slate-600" />
@@ -91,13 +93,13 @@ export default function FolderModal() {
               autoFocus
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="misal: Production Servers"
+              placeholder={t('folder.placeholder')}
               className="w-full bg-transparent text-[14px] text-slate-200 placeholder:text-slate-600 focus:outline-none"
             />
           </div>
 
           <label className="mb-1.5 mt-4 block text-[12px] font-medium text-slate-400">
-            Ikon folder
+            {t('folder.icon')}
           </label>
           <div className="grid grid-cols-6 gap-2">
             {ICONS.map(({ key, Icon, color }) => (
@@ -124,14 +126,14 @@ export default function FolderModal() {
             onClick={() => setFolderModal(false)}
             className="rounded-lg px-3 py-1.5 text-[13px] text-slate-400 hover:bg-white/5 hover:text-slate-200"
           >
-            Batal
+            {t('common.cancel')}
           </button>
           <button
             type="submit"
             disabled={!name.trim()}
             className="rounded-lg bg-sky-600 px-4 py-1.5 text-[13px] font-medium text-white transition-colors hover:bg-sky-500 disabled:cursor-not-allowed disabled:opacity-40"
           >
-            {editing ? 'Simpan' : 'Buat folder'}
+            {editing ? t('common.save') : t('folder.create')}
           </button>
         </div>
       </form>

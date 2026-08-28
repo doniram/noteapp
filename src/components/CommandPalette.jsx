@@ -11,6 +11,7 @@ export default function CommandPalette() {
     setPaletteOpen,
     setActiveId,
     createNote,
+    t,
   } = useApp()
 
   const [query, setQuery] = useState('')
@@ -94,7 +95,7 @@ export default function CommandPalette() {
               setIdx(0)
             }}
             onKeyDown={onKeyDown}
-            placeholder="Cari catatan, IP, parameter config, tag... (misal: nginx timeout)"
+            placeholder={t('palette.placeholder')}
             className="flex-1 bg-transparent text-[14px] text-slate-100 placeholder:text-slate-600 focus:outline-none"
           />
           <span className="rounded border border-slate-700 bg-slate-800 px-1.5 py-0.5 text-[10px] text-slate-500">
@@ -112,22 +113,22 @@ export default function CommandPalette() {
             }`}
           >
             <Plus className="h-4 w-4" />
-            <span className="font-medium">Buat catatan baru</span>
+            <span className="font-medium">{t('palette.newNote')}</span>
             <CornerDownLeft className="ml-auto h-3.5 w-3.5 opacity-50" />
           </button>
 
           {loading ? (
             <div className="flex items-center justify-center gap-2 px-3 py-8 text-[13px] text-slate-500">
-              <Loader2 className="h-4 w-4 animate-spin" /> Mencari...
+              <Loader2 className="h-4 w-4 animate-spin" /> {t('palette.searching')}
             </div>
           ) : results.length === 0 && query ? (
             <div className="px-3 py-8 text-center text-[13px] text-slate-500">
-              Tidak ditemukan "{query}" di semua catatan.
+              {t('palette.noResults', { q: query })}
             </div>
           ) : (
             <>
               <div className="px-3 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-wider text-slate-600">
-                {query ? `${results.length} hasil` : 'Ketik untuk mencari'}
+                {query ? t('palette.results', { n: results.length }) : t('palette.type')}
               </div>
               {results.map((n, i) => {
                 const snippet = n.snippet ?? stripMarkdown(n.content)
@@ -184,11 +185,9 @@ export default function CommandPalette() {
 
         <div className="flex items-center gap-3 border-t border-slate-800 px-4 py-2 text-[11px] text-slate-600">
           <span className="flex items-center gap-1">
-            <CornerDownLeft className="h-3 w-3" /> buka
+            <CornerDownLeft className="h-3 w-3" /> {t('palette.open')}
           </span>
-          <span className="flex items-center gap-1">
-            ↑↓ navigasi
-          </span>
+          <span className="flex items-center gap-1">{t('palette.nav')}</span>
           <span className="ml-auto text-slate-700">DevNotes</span>
         </div>
       </div>

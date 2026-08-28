@@ -1,6 +1,7 @@
 import { createContext, useEffect, useMemo, useRef, useState } from 'react'
 import { api, setToken, setUnauthorizedHandler } from '../api'
 import { uid } from '../lib/utils.jsx'
+import { translate } from '../i18n'
 
 const AppContext = createContext(null)
 
@@ -49,12 +50,28 @@ export function AppProvider({ children }) {
       return 'dark'
     }
   })
+  const [lang, setLang] = useState(() => {
+    try {
+      return localStorage.getItem('devnotes-lang') || 'id'
+    } catch {
+      return 'id'
+    }
+  })
+  const t = useMemo(() => (key, vars) => translate(lang, key, vars), [lang])
 
   const [sessionExpiring, setSessionExpiring] = useState(false)
   const [sessionCountdown, setSessionCountdown] = useState(SESSION_WARN_SECONDS)
   const markActiveRef = useRef(null)
 
   const toggleTheme = () => setTheme((t) => (t === 'dark' ? 'light' : 'dark'))
+  const changeLang = (l) => {
+    setLang(l)
+    try {
+      localStorage.setItem('devnotes-lang', l)
+    } catch {
+      /* ignore */
+    }
+  }
 
   useEffect(() => {
     const mq = window.matchMedia('(max-width: 767px)')
@@ -503,6 +520,9 @@ export function AppProvider({ children }) {
     syncNextcloud,
     theme,
     toggleTheme,
+    lang,
+    setLang: changeLang,
+    t,
     sessionExpiring,
     sessionCountdown,
     continueSession,

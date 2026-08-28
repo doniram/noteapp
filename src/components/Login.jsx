@@ -3,7 +3,7 @@ import { StickyNote, LogIn, Loader2, Eye, EyeOff, KeyRound } from 'lucide-react'
 import { useApp } from '../context/useApp'
 
 export default function Login() {
-  const { login } = useApp()
+  const { login, t } = useApp()
   const [password, setPassword] = useState('')
   const [showPw, setShowPw] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -34,20 +34,20 @@ export default function Login() {
           </div>
           <div className="text-center">
             <h1 className="text-xl font-bold tracking-tight text-slate-100">DevNotes</h1>
-            <p className="mt-1 text-[13px] text-slate-500">Dokumentasi teknis & catatan operasional</p>
+            <p className="mt-1 text-[13px] text-slate-500">{t('login.subtitle')}</p>
           </div>
         </div>
 
         <div className="rounded-2xl border border-slate-800 bg-[#0d141d] p-6 shadow-2xl shadow-black/40">
           <form onSubmit={submit} className="space-y-3">
             <div>
-              <label className="mb-1 block text-[12px] font-medium text-slate-400">Password</label>
+              <label className="mb-1 block text-[12px] font-medium text-slate-400">{t('login.password')}</label>
               <div className="relative">
                 <input
                   type={showPw ? 'text' : 'password'}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Masukkan password"
+                  placeholder={t('login.passwordPlaceholder')}
                   autoComplete="current-password"
                   autoFocus
                   className={inputCls + ' pr-10'}
@@ -75,7 +75,7 @@ export default function Login() {
             >
               {busy && <Loader2 className="h-4 w-4 animate-spin" />}
               <LogIn className="h-4 w-4" />
-              Masuk
+              {t('login.submit')}
             </button>
           </form>
 

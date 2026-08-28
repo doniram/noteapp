@@ -50,30 +50,30 @@ turndown.use(gfm)
 const MODES = ['edit', 'split', 'preview']
 
 const toolbar = [
-  { icon: Bold, title: 'Tebal', kind: 'wrap', args: ['**', '**', 'teks tebal'] },
-  { icon: Italic, title: 'Miring', kind: 'wrap', args: ['*', '*', 'teks miring'] },
-  { icon: Strikethrough, title: 'Coret', kind: 'wrap', args: ['~~', '~~', 'teks'] },
+  { icon: Bold, label: 'bold', kind: 'wrap', args: ['**', '**', 'teks tebal'] },
+  { icon: Italic, label: 'italic', kind: 'wrap', args: ['*', '*', 'teks miring'] },
+  { icon: Strikethrough, label: 'strike', kind: 'wrap', args: ['~~', '~~', 'teks'] },
   null,
-  { icon: Heading1, title: 'Judul 1', kind: 'line', args: ['# '] },
-  { icon: Heading2, title: 'Judul 2', kind: 'line', args: ['## '] },
-  { icon: Heading3, title: 'Judul 3', kind: 'line', args: ['### '] },
-  { icon: Heading4, title: 'Judul 4', kind: 'line', args: ['#### '] },
-  { icon: Quote, title: 'Kutipan', kind: 'line', args: ['> '] },
+  { icon: Heading1, label: 'h1', kind: 'line', args: ['# '] },
+  { icon: Heading2, label: 'h2', kind: 'line', args: ['## '] },
+  { icon: Heading3, label: 'h3', kind: 'line', args: ['### '] },
+  { icon: Heading4, label: 'h4', kind: 'line', args: ['#### '] },
+  { icon: Quote, label: 'quote', kind: 'line', args: ['> '] },
   null,
-  { icon: Code2, title: 'Kode inline', kind: 'wrap', args: ['`', '`', 'kode'] },
-  { icon: Code, title: 'Blok kode', kind: 'wrap', args: ['```bash\n', '\n```', 'perintah'] },
+  { icon: Code2, label: 'codeInline', kind: 'wrap', args: ['`', '`', 'kode'] },
+  { icon: Code, label: 'codeBlock', kind: 'wrap', args: ['```bash\n', '\n```', 'perintah'] },
   null,
-  { icon: Link2, title: 'Link', kind: 'wrap', args: ['[', '](https://)', 'teks link'] },
-  { icon: Image, title: 'Gambar', kind: 'wrap', args: ['![', '](https://)', 'alt text'] },
+  { icon: Link2, label: 'link', kind: 'wrap', args: ['[', '](https://)', 'teks link'] },
+  { icon: Image, label: 'image', kind: 'wrap', args: ['![', '](https://)', 'alt text'] },
   null,
-  { icon: Highlighter, title: 'Sorotan', kind: 'wrap', args: ['==', '==', 'teks sorotan'] },
+  { icon: Highlighter, label: 'highlight', kind: 'wrap', args: ['==', '==', 'teks sorotan'] },
   null,
-  { icon: List, title: 'List', kind: 'line', args: ['- '] },
-  { icon: ListOrdered, title: 'List nomor', kind: 'line', args: ['1. '] },
-  { icon: ListChecks, title: 'Checklist', kind: 'line', args: ['- [ ] '] },
+  { icon: List, label: 'list', kind: 'line', args: ['- '] },
+  { icon: ListOrdered, label: 'listOrdered', kind: 'line', args: ['1. '] },
+  { icon: ListChecks, label: 'listChecks', kind: 'line', args: ['- [ ] '] },
   null,
-  { icon: Table, title: 'Tabel', kind: 'insert', args: ['| Kolom 1 | Kolom 2 |\n|---|---|\n|  |  |'] },
-  { icon: Minus, title: 'Garis pemisah', kind: 'insert', args: ['\n---\n'] },
+  { icon: Table, label: 'table', kind: 'insert', args: ['| Kolom 1 | Kolom 2 |\n|---|---|\n|  |  |'] },
+  { icon: Minus, label: 'hr', kind: 'insert', args: ['\n---\n'] },
 ]
 
 export default function Editor() {
@@ -91,6 +91,7 @@ export default function Editor() {
     setActiveId,
     isMobile,
     setSidebarOpen,
+    t,
   } = useApp()
 
   const createNew = () => {
@@ -229,7 +230,7 @@ export default function Editor() {
                 }`}
               >
                 <Icon className="h-3.5 w-3.5" />
-                {m === 'split' ? 'Split' : m === 'edit' ? 'Edit' : 'Preview'}
+                {m === 'split' ? t('editor.modeSplit') : m === 'edit' ? t('editor.modeEdit') : t('editor.modePreview')}
               </button>
             )
           })}
@@ -239,7 +240,7 @@ export default function Editor() {
 
         <button
           onClick={() => updateNote(note.id, { pinned: !note.pinned })}
-          title="Sematan ke daftar teratas"
+          title={note.pinned ? t('editor.pinned') : t('editor.pin')}
           className={`flex items-center gap-1.5 rounded-md px-2 py-1 text-[12px] font-medium transition-colors ${
             note.pinned
               ? 'bg-amber-500/15 text-amber-400'
@@ -247,13 +248,13 @@ export default function Editor() {
           }`}
         >
           <Pin className={`h-3.5 w-3.5 ${note.pinned ? 'fill-amber-400' : ''}`} />
-          {note.pinned ? 'Disematkan' : 'Pin'}
+          {note.pinned ? t('editor.pinned') : t('editor.pin')}
         </button>
 
         <div className="ml-auto flex items-center gap-1.5">
           <span className="flex items-center gap-1 text-[11px] text-emerald-500">
             {savedAt ? <Check className="h-3 w-3" /> : <Clock className="h-3 w-3 animate-pulse" />}
-            Tersimpan {savedAt ? formatRange(savedAt) : '...'}
+            {t('editor.saved', { d: savedAt ? formatRange(savedAt) : '...' })}
           </span>
 
           <button
@@ -261,19 +262,19 @@ export default function Editor() {
             title="Export Markdown"
             className="flex items-center gap-1 rounded-md border border-slate-800 px-2 py-1 text-[12px] text-slate-400 transition-colors hover:border-slate-600 hover:text-slate-200"
           >
-            <Download className="h-3.5 w-3.5" /> .md
+            <Download className="h-3.5 w-3.5" /> {t('editor.exportMd')}
           </button>
           <button
             onClick={() => exportPdf(note)}
-            title="Export PDF"
+            title={t('editor.exportPdf')}
             className="flex items-center gap-1 rounded-md border border-slate-800 px-2 py-1 text-[12px] text-slate-400 transition-colors hover:border-slate-600 hover:text-slate-200"
           >
-            <FileText className="h-3.5 w-3.5" /> PDF
+            <FileText className="h-3.5 w-3.5" /> {t('editor.exportPdf')}
           </button>
 
           <button
             onClick={() => deleteNote(note.id)}
-            title="Hapus catatan"
+            title={t('editor.deleteNote')}
             className="rounded-md p-1.5 text-slate-600 transition-colors hover:bg-rose-500/15 hover:text-rose-400"
           >
             <Trash2 className="h-4 w-4" />
@@ -286,7 +287,7 @@ export default function Editor() {
         <input
           value={note.title}
           onChange={(e) => updateNote(note.id, { title: e.target.value })}
-          placeholder="Judul catatan..."
+          placeholder={t('editor.titlePlaceholder')}
           className="w-full bg-transparent text-xl font-bold tracking-tight text-slate-100 placeholder:text-slate-700 focus:outline-none"
         />
         <div className="mt-2 flex flex-wrap items-center gap-2">
@@ -298,7 +299,7 @@ export default function Editor() {
               onChange={(e) => updateNote(note.id, { folderId: e.target.value || null })}
               className="bg-transparent text-[12px] text-slate-300 focus:outline-none"
             >
-              <option value="">Tanpa folder</option>
+              <option value="">{t('common.noFolder')}</option>
               {folders.map((f) => (
                 <option key={f.id} value={f.id}>
                   {f.name}
@@ -349,7 +350,7 @@ export default function Editor() {
           )}
 
           <span className="ml-auto text-[11px] text-slate-600">
-            Diubah {formatRange(note.updatedAt)}
+            {t('editor.updated', { d: formatRange(note.updatedAt) })}
           </span>
         </div>
       </div>
@@ -364,17 +365,17 @@ export default function Editor() {
           >
             {/* toolstrip */}
             <div className="flex items-center gap-0.5 overflow-x-auto border-b border-slate-800/60 bg-[#0d141d] px-2 py-1.5">
-              {toolbar.map((t, i) =>
-                t === null ? (
+              {toolbar.map((tt, i) =>
+                tt === null ? (
                   <div key={`sep-${i}`} className="mx-1 h-4 w-px shrink-0 bg-slate-800" />
                 ) : (
                   <button
                     key={i}
-                    onClick={() => applyFormat(t.kind, t.args)}
-                    title={t.title}
+                    onClick={() => applyFormat(tt.kind, tt.args)}
+                    title={t('toolbar.' + tt.label)}
                     className="shrink-0 rounded p-1.5 text-slate-400 transition-colors hover:bg-white/10 hover:text-slate-100"
                   >
-                    <t.icon className="h-4 w-4" />
+                    <tt.icon className="h-4 w-4" />
                   </button>
                 )
               )}
@@ -410,7 +411,7 @@ export default function Editor() {
                 }
               }}
               spellCheck={false}
-              placeholder="Tulis markdown di sini... (ex: ```bash, # judul, - list)"
+              placeholder={t('editor.textareaPlaceholder')}
               className="min-h-0 flex-1 w-full resize-none bg-transparent p-5 font-mono text-[13px] leading-relaxed text-slate-300 placeholder:text-slate-700 focus:outline-none"
             />
           </div>
@@ -455,14 +456,14 @@ export default function Editor() {
           onClick={() => fileInputRef.current?.click()}
           className="flex items-center gap-1.5 rounded-md border border-slate-800 px-2 py-1 text-[11px] text-slate-500 transition-colors hover:border-slate-600 hover:text-slate-200"
         >
-          <Paperclip className="h-3 w-3" /> Lampirkan file
+          <Paperclip className="h-3 w-3" /> {t('editor.attach')}
         </button>
         <div className="flex flex-wrap items-center gap-2">
           {note.attachments.map((a) => (
             <span
               key={a.id}
               className="group flex cursor-pointer items-center gap-1.5 rounded border border-slate-800 bg-slate-900/60 px-2 py-1 text-[11px] text-slate-400 transition-colors hover:border-slate-600 hover:text-slate-200"
-              title="Unduh lampiran"
+              title={t('editor.download')}
               onClick={() => window.open(api.attachmentUrl(a.id), '_blank')}
             >
               <FileText className="h-3 w-3 text-sky-500" />
@@ -473,7 +474,7 @@ export default function Editor() {
                   e.stopPropagation()
                   removeAttachment(note.id, a.id)
                 }}
-                title="Hapus lampiran"
+                title={t('common.delete')}
                 className="rounded p-0.5 opacity-0 transition-opacity hover:bg-rose-500/15 hover:text-rose-400 group-hover:opacity-100"
               >
                 <X className="h-3 w-3" />
@@ -481,7 +482,7 @@ export default function Editor() {
             </span>
           ))}
           {note.attachments.length === 0 && (
-            <span className="text-[11px] text-slate-700">Belum ada lampiran</span>
+            <span className="text-[11px] text-slate-700">{t('editor.noAttachments')}</span>
           )}
         </div>
       </div>
@@ -490,32 +491,28 @@ export default function Editor() {
 }
 
 function EmptyEditor({ setTplOpen, onCreate }) {
+  const { t } = useApp()
   return (
     <main className="flex h-full min-w-0 flex-1 flex-col items-center justify-center gap-4 p-8 text-center">
       <div className="flex h-16 w-16 items-center justify-center rounded-2xl border border-slate-800 bg-slate-900/50">
         <FileText className="h-7 w-7 text-slate-600" />
       </div>
       <div>
-        <h2 className="text-lg font-semibold text-slate-200">Pilih atau buat catatan</h2>
-        <p className="mt-1 max-w-sm text-[13px] text-slate-500">
-          Dokumentasikan konfigurasi server, SOP, dan troubleshooting. Cari cepat dengan{' '}
-          <kbd className="rounded border border-slate-700 bg-slate-800 px-1 py-0.5 font-mono text-[11px]">Ctrl</kbd>{' '}
-          +{' '}
-          <kbd className="rounded border border-slate-700 bg-slate-800 px-1 py-0.5 font-mono text-[11px]">K</kbd>
-        </p>
+        <h2 className="text-lg font-semibold text-slate-200">{t('editor.selectNote')}</h2>
+        <p className="mt-1 max-w-sm text-[13px] text-slate-500">{t('editor.emptyHint')}</p>
       </div>
       <div className="flex gap-2">
         <button
           onClick={() => setTplOpen(true)}
           className="rounded-lg border border-slate-700 px-4 py-2 text-[13px] font-medium text-slate-300 transition-colors hover:border-slate-500 hover:text-white"
         >
-          Pakai Template
+          {t('editor.useTemplate')}
         </button>
         <button
           onClick={() => onCreate()}
           className="rounded-lg bg-sky-600 px-4 py-2 text-[13px] font-medium text-white transition-colors hover:bg-sky-500"
         >
-          + Catatan Baru
+          {t('editor.newNote')}
         </button>
       </div>
     </main>

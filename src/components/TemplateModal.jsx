@@ -13,7 +13,7 @@ const icons = {
 }
 
 export default function TemplateModal() {
-  const { tplOpen, setTplOpen, createNoteFromTemplate, importMarkdown } = useApp()
+  const { tplOpen, setTplOpen, createNoteFromTemplate, importMarkdown, t } = useApp()
   const [importing, setImporting] = useState(false)
   const fileRef = useRef(null)
 
@@ -32,7 +32,7 @@ export default function TemplateModal() {
     setImporting(true)
     try {
       const text = await file.text()
-      await importMarkdown(titleFromFile(file.name) || 'Catatan Import', text)
+      await importMarkdown(titleFromFile(file.name) || t('template.importTitle'), text)
     } finally {
       setImporting(false)
     }
@@ -43,7 +43,7 @@ export default function TemplateModal() {
       <div className="flex items-center justify-between border-b border-slate-800 px-5 py-3.5">
         <div className="flex items-center gap-2">
           <LayoutTemplate className="h-4 w-4 text-sky-400" />
-          <h3 className="text-[15px] font-semibold text-slate-100">Buat catatan dari template</h3>
+          <h3 className="text-[15px] font-semibold text-slate-100">{t('template.title')}</h3>
         </div>
         <button
           onClick={() => setTplOpen(false)}
@@ -66,10 +66,10 @@ export default function TemplateModal() {
           </div>
           <div>
             <div className="text-[13px] font-semibold text-sky-200">
-              {importing ? 'Mengimpor...' : 'Import file .md'}
+              {importing ? t('template.importing') : t('template.import')}
             </div>
             <div className="mt-0.5 text-[12px] leading-snug text-slate-500">
-              Buka file markdown (.md) dan jadikan catatan baru.
+              {t('template.importDesc')}
             </div>
           </div>
         </button>
@@ -97,7 +97,7 @@ export default function TemplateModal() {
       </div>
 
       <div className="border-t border-slate-800 px-5 py-3 text-[11px] text-slate-600">
-        Template membuat catatan baru dengan struktur siap isi — kamu bisa langsung edit.
+        {t('template.footer')}
       </div>
     </Modal>
   )

@@ -100,6 +100,9 @@ export default function Sidebar() {
     setSettingsOpen,
     view,
     setView,
+    t,
+    lang,
+    setLang,
   } = useApp()
 
   const closeMobile = () => {
@@ -137,7 +140,7 @@ export default function Sidebar() {
         </div>
         <div className="min-w-0 flex-1">
           <div className="text-sm font-bold tracking-tight text-slate-100">DevNotes</div>
-          <div className="text-[11px] text-slate-500">Dokumentasi teknis</div>
+          <div className="text-[11px] text-slate-500">{t('side.subtitle')}</div>
         </div>
         {isMobile && (
           <button
@@ -157,7 +160,7 @@ export default function Sidebar() {
           className="flex w-full items-center gap-2 rounded-lg border border-slate-800 bg-slate-900/60 px-2.5 py-2 text-[13px] text-slate-500 transition-colors hover:border-slate-700 hover:text-slate-300"
         >
           <Search className="h-3.5 w-3.5" />
-          <span className="flex-1 text-left">Cari catatan...</span>
+          <span className="flex-1 text-left">{t('side.search')}</span>
           <span className="flex items-center gap-0.5 rounded border border-slate-700 bg-slate-800 px-1 py-0.5 text-[10px] font-medium text-slate-400">
             <Command className="h-3 w-3" /> K
           </span>
@@ -176,21 +179,21 @@ export default function Sidebar() {
             className="group flex w-full items-center gap-2 rounded-lg border border-dashed border-slate-800 px-3 py-2.5 text-[13px] text-slate-500 transition-colors hover:border-sky-800 hover:bg-sky-500/10 hover:text-sky-300"
           >
             <LayoutTemplate className="h-4 w-4" />
-            <span className="font-medium">Buat dari Template</span>
+            <span className="font-medium">{t('side.fromTemplate')}</span>
           </button>
         </section>
 
         <section>
           <Row active={view === 'tasks'} onClick={() => { setView('tasks'); closeMobile() }}>
             <ListTodo className="h-4 w-4 shrink-0 text-emerald-400" />
-            <span className="flex-1 font-medium">Tugas</span>
+            <span className="flex-1 font-medium">{t('side.tasks')}</span>
           </Row>
         </section>
 
         <nav className="space-y-0.5">
           <Row active={view === 'notes' && !activeFolder && !activeTag} onClick={selectAll}>
             <FolderOpen className="h-4 w-4 shrink-0 text-sky-400" />
-            <span className="flex-1 font-medium">Semua Catatan</span>
+            <span className="flex-1 font-medium">{t('side.allNotes')}</span>
             <span className="text-[11px] text-slate-600">{notes.length}</span>
           </Row>
 
@@ -204,7 +207,7 @@ export default function Sidebar() {
             }}
           >
             <Pin className="h-4 w-4 shrink-0 text-amber-400" />
-            <span className="flex-1 font-medium">Disematkan</span>
+            <span className="flex-1 font-medium">{t('side.pinned')}</span>
             <span className="text-[11px] text-slate-600">{pinnedCount}</span>
           </Row>
         </nav>
@@ -213,11 +216,11 @@ export default function Sidebar() {
         <section>
           <div className="mb-1.5 flex items-center justify-between pr-1">
             <span className="px-1 text-[11px] font-semibold uppercase tracking-wider text-slate-600">
-              Folder
+              {t('side.folders')}
             </span>
             <button
               onClick={() => setFolderModal(true)}
-              title="Buat folder baru"
+              title={t('side.newFolder')}
               className="rounded p-0.5 text-slate-500 transition-colors hover:bg-white/10 hover:text-sky-300"
             >
               <Plus className="h-4 w-4" />
@@ -234,7 +237,7 @@ export default function Sidebar() {
               }}
             >
               <FileText className="h-4 w-4 shrink-0 text-slate-500" />
-              <span className="flex-1 italic">Tanpa folder</span>
+              <span className="flex-1 italic">{t('common.noFolder')}</span>
               <span className="text-[11px] text-slate-600">
                 {notes.filter((n) => !n.folderId).length}
               </span>
@@ -268,14 +271,14 @@ export default function Sidebar() {
                         setFolderModalTarget(folder)
                         setFolderModal(true)
                       }}
-                      title="Ubah folder"
+                      title={t('side.editFolder')}
                       className="rounded p-1 text-slate-500 hover:bg-white/10 hover:text-sky-300"
                     >
                       <Pencil className="h-3 w-3" />
                     </button>
                     <button
                       onClick={() => setFolderToDelete(folder)}
-                      title="Hapus folder"
+                      title={t('side.deleteFolder')}
                       className="rounded p-1 text-slate-500 hover:bg-rose-500/15 hover:text-rose-400"
                     >
                       <Trash2 className="h-3 w-3" />
@@ -291,11 +294,11 @@ export default function Sidebar() {
         <section>
           <div className="mb-1.5 flex items-center justify-between pr-1">
             <span className="px-1 text-[11px] font-semibold uppercase tracking-wider text-slate-600">
-              Tag
+              {t('side.tags')}
             </span>
             <button
               onClick={() => setTagModal(true)}
-              title="Buat tag baru"
+              title={t('side.addTag')}
               className="rounded p-0.5 text-slate-500 transition-colors hover:bg-white/10 hover:text-sky-300"
             >
               <Plus className="h-4 w-4" />
@@ -303,7 +306,7 @@ export default function Sidebar() {
           </div>
           <div className="flex flex-wrap gap-1.5">
             {tags.length === 0 && (
-              <span className="px-1 text-[12px] text-slate-600">Belum ada tag</span>
+              <span className="px-1 text-[12px] text-slate-600">{t('side.noTags')}</span>
             )}
             {tags.map((tag) => {
               const active = activeTag === tag.id && activeFolder === null
@@ -337,7 +340,7 @@ export default function Sidebar() {
             className="mt-2 flex w-full items-center gap-1.5 rounded-lg border border-dashed border-slate-800 px-2.5 py-2 text-[12px] text-slate-500 transition-colors hover:border-sky-800 hover:bg-sky-500/10 hover:text-sky-300"
           >
             <Plus className="h-3.5 w-3.5" />
-            <span className="font-medium">Tambah Tag</span>
+            <span className="font-medium">{t('side.addTag')}</span>
           </button>
         </section>
       </div>
@@ -345,29 +348,36 @@ export default function Sidebar() {
       <div className="flex items-center gap-2 border-t border-slate-800/70 px-3 py-3">
         <button
           onClick={toggleTheme}
-          title={theme === 'dark' ? 'Mode terang' : 'Mode gelap'}
+          title={theme === 'dark' ? t('side.lightMode') : t('side.darkMode')}
           className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-slate-500 transition-colors hover:bg-white/10 hover:text-amber-400"
         >
           {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
         </button>
         <button
           onClick={() => setSettingsOpen(true)}
-          title="Pengaturan"
+          title={t('side.settings')}
           className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-slate-500 transition-colors hover:bg-white/10 hover:text-sky-300"
         >
           <SettingsIcon className="h-4 w-4" />
         </button>
+        <button
+          onClick={() => setLang(lang === 'id' ? 'en' : 'id')}
+          title={lang === 'id' ? 'Switch to English' : 'Beralih ke Indonesia'}
+          className="flex h-7 shrink-0 items-center justify-center rounded-md border border-slate-800 px-1.5 text-[11px] font-semibold uppercase text-slate-400 transition-colors hover:bg-white/10 hover:text-sky-300"
+        >
+          {lang === 'id' ? 'EN' : 'ID'}
+        </button>
         <div className="flex-1" />
         <button
           onClick={logout}
-          title="Keluar"
+          title={t('side.logout')}
           className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-slate-500 transition-colors hover:bg-rose-500/15 hover:text-rose-400"
         >
           <LogOut className="h-4 w-4" />
         </button>
         {activeNote?.updatedAt && (
           <span className="ml-auto shrink-0 rounded border border-slate-800 bg-slate-900 px-1.5 py-0.5 text-[10px] text-sky-400">
-            autosave
+            {t('side.autosave')}
           </span>
         )}
       </div>

@@ -10,11 +10,13 @@ import {
   Loader2,
 } from 'lucide-react'
 import { api } from '../api'
+import { useApp } from '../context/useApp'
 import Modal from './Modal'
 
 const SWATCHES = ['#8b5cf6', '#f59e0b', '#38bdf8', '#10b981', '#ec4899', '#64748b']
 
 function ColorPicker({ value, onChange }) {
+  const { t } = useApp()
   return (
     <div className="mt-2 space-y-2">
       <div className="flex flex-wrap gap-2">
@@ -42,7 +44,7 @@ function ColorPicker({ value, onChange }) {
           placeholder="#8b5cf6"
           className="w-28 rounded-lg border border-slate-700 bg-slate-900 px-2 py-1.5 text-[12px] text-slate-100 placeholder:text-slate-600 focus:border-sky-700 focus:outline-none"
         />
-        <span className="text-[11px] text-slate-600">hex / pilih</span>
+        <span className="text-[11px] text-slate-600">{t('tasks.hexHint')}</span>
       </div>
     </div>
   )
@@ -80,6 +82,7 @@ function computeMove(list, dragId, targetStatusId, beforeTaskId) {
 }
 
 export default function TasksBoard() {
+  const { t } = useApp()
   const [columns, setColumns] = useState([])
   const [tasks, setTasks] = useState([])
   const [loading, setLoading] = useState(true)
@@ -189,7 +192,7 @@ export default function TasksBoard() {
   }
 
   const deleteColumn = async (col) => {
-    if (!window.confirm(`Hapus kolom "${col.name}" beserta semua tugas di dalamnya?`)) return
+    if (!window.confirm(t('tasks.deleteColumnConfirm', { name: col.name }))) return
     try {
       await api.deleteTaskStatus(col.id)
       setColumns((prev) => prev.filter((c) => c.id !== col.id))
@@ -267,8 +270,10 @@ export default function TasksBoard() {
           <ListTodo className="h-4 w-4 text-sky-300" />
         </div>
         <div>
-          <h2 className="text-[15px] font-semibold text-slate-100">Papan Tugas</h2>
-          <p className="text-[12px] text-slate-500">{tasks.length} tugas · {sortedCols.length} kolom</p>
+          <h2 className="text-[15px] font-semibold text-slate-100">{t('tasks.title')}</h2>
+          <p className="text-[12px] text-slate-500">
+            {t('tasks.summary', { tasks: tasks.length, cols: sortedCols.length })}
+          </p>
         </div>
         {error && (
           <span className="ml-auto max-w-[40%] truncate text-[12px] text-rose-400">{error}</span>
@@ -313,7 +318,7 @@ export default function TasksBoard() {
                   <button
                     onClick={() => moveColumn(col.id, -1)}
                     disabled={idx === 0}
-                    title="Geser ke kiri"
+                    title={t('tasks.moveLeft')}
                     className="rounded p-0.5 text-slate-500 hover:bg-white/10 hover:text-sky-300 disabled:opacity-30"
                   >
                     <ChevronLeft className="h-3.5 w-3.5" />
@@ -321,21 +326,21 @@ export default function TasksBoard() {
                   <button
                     onClick={() => moveColumn(col.id, 1)}
                     disabled={idx === sortedCols.length - 1}
-                    title="Geser ke kanan"
+                    title={t('tasks.moveRight')}
                     className="rounded p-0.5 text-slate-500 hover:bg-white/10 hover:text-sky-300 disabled:opacity-30"
                   >
                     <ChevronRight className="h-3.5 w-3.5" />
                   </button>
                   <button
                     onClick={() => openEditColumn(col)}
-                    title="Ubah kolom"
+                    title={t('tasks.editColumn')}
                     className="rounded p-0.5 text-slate-500 hover:bg-white/10 hover:text-sky-300"
                   >
                     <Pencil className="h-3 w-3" />
                   </button>
                   <button
                     onClick={() => deleteColumn(col)}
-                    title="Hapus kolom"
+                    title={t('common.delete')}
                     className="rounded p-0.5 text-slate-500 hover:bg-rose-500/15 hover:text-rose-400"
                   >
                     <Trash2 className="h-3 w-3" />
@@ -391,13 +396,13 @@ export default function TasksBoard() {
                               setEditTitle(task.title)
                             }}
                             className="flex-1 truncate text-left text-slate-200"
-                            title="Klik dua kali untuk mengubah judul"
+                            title={t('editor.dblclickTitle')}
                           >
                             {task.title}
                           </button>
                           <button
                             onClick={() => deleteTask(task.id)}
-                            title="Hapus tugas"
+                            title={t('common.delete')}
                             className="rounded p-0.5 text-slate-600 opacity-0 transition-opacity group-hover:opacity-100 hover:bg-rose-500/15 hover:text-rose-400"
                           >
                             <Trash2 className="h-3 w-3" />
@@ -420,7 +425,7 @@ export default function TasksBoard() {
                           setNewTaskTitle('')
                         }
                       }}
-                      placeholder="Judul tugas..."
+                      placeholder={t('tasks.taskTitle')}
                       className="w-full bg-transparent text-[13px] text-slate-200 placeholder:text-slate-600 focus:outline-none"
                     />
                   </div>
@@ -435,7 +440,7 @@ export default function TasksBoard() {
                 className="flex items-center gap-1.5 px-3 py-2.5 text-[12px] font-medium text-slate-500 transition-colors hover:text-sky-300"
               >
                 {addingIn === col.id ? <X className="h-3.5 w-3.5" /> : <Plus className="h-3.5 w-3.5" />}
-                {addingIn === col.id ? 'Batal' : 'New page'}
+                {addingIn === col.id ? t('tasks.cancel') : t('tasks.newPage')}
               </button>
             </div>
           )
@@ -456,7 +461,7 @@ export default function TasksBoard() {
                     setNewColColor(SWATCHES[0])
                   }
                 }}
-                placeholder="Nama kolom..."
+                placeholder={t('tasks.columnName')}
                 className="w-full rounded-lg border border-slate-700 bg-slate-900 px-2 py-1.5 text-[13px] text-slate-100 placeholder:text-slate-600 focus:border-sky-700 focus:outline-none"
               />
               <ColorPicker value={newColColor} onChange={setNewColColor} />
@@ -464,7 +469,7 @@ export default function TasksBoard() {
                 onClick={addColumn}
                 className="mt-2 w-full rounded-lg bg-sky-600 py-1.5 text-[12px] font-medium text-white transition-colors hover:bg-sky-500"
               >
-                Tambah Kolom
+                {t('tasks.addColumn')}
               </button>
             </div>
           ) : (
@@ -473,7 +478,7 @@ export default function TasksBoard() {
               className="flex w-full items-center gap-1.5 rounded-xl border border-dashed border-slate-800 px-3 py-3 text-[13px] text-slate-500 transition-colors hover:border-sky-800 hover:bg-sky-500/5 hover:text-sky-300"
             >
               <Plus className="h-4 w-4" />
-              Kolom baru
+              {t('tasks.newColumn')}
             </button>
           )}
         </div>
@@ -482,8 +487,8 @@ export default function TasksBoard() {
       {editCol && (
         <Modal onClose={() => setEditCol(null)} width="max-w-sm">
           <div className="p-5">
-            <h3 className="text-[15px] font-semibold text-slate-100">Ubah Kolom</h3>
-            <label className="mt-4 block text-[12px] font-medium text-slate-500">Nama</label>
+            <h3 className="text-[15px] font-semibold text-slate-100">{t('tasks.editColumn')}</h3>
+            <label className="mt-4 block text-[12px] font-medium text-slate-500">{t('tasks.columnName').replace('...', '')}</label>
             <input
               autoFocus
               value={editColName}
@@ -491,20 +496,20 @@ export default function TasksBoard() {
               onKeyDown={(e) => e.key === 'Enter' && saveColumn()}
               className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-2.5 py-2 text-[13px] text-slate-100 focus:border-sky-700 focus:outline-none"
             />
-            <label className="mt-4 block text-[12px] font-medium text-slate-500">Warna</label>
+            <label className="mt-4 block text-[12px] font-medium text-slate-500">{t('tasks.color')}</label>
             <ColorPicker value={editColColor} onChange={setEditColColor} />
             <div className="mt-6 flex justify-end gap-2">
               <button
                 onClick={() => setEditCol(null)}
                 className="rounded-lg border border-slate-700 px-3 py-1.5 text-[12px] text-slate-400 hover:bg-white/5"
               >
-                Batal
+                {t('common.cancel')}
               </button>
               <button
                 onClick={saveColumn}
                 className="rounded-lg bg-sky-600 px-3 py-1.5 text-[12px] font-medium text-white hover:bg-sky-500"
               >
-                Simpan
+                {t('common.save')}
               </button>
             </div>
           </div>

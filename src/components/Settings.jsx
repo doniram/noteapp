@@ -26,6 +26,7 @@ export default function Settings() {
     syncNextcloud,
     syncing,
     syncResult,
+    t,
   } = useApp()
 
   const [server, setServer] = useState(nextcloud?.server || '')
@@ -45,7 +46,7 @@ export default function Settings() {
     try {
       await saveNextcloud(cfg())
       setPassword('')
-      setMsg({ ok: true, text: 'Pengaturan WebDAV disimpan' })
+      setMsg({ ok: true, text: t('settings.saved') })
     } catch (err) {
       setMsg({ ok: false, text: err.message })
     } finally {
@@ -87,12 +88,12 @@ export default function Settings() {
               <CloudCog className="h-4 w-4 text-white" />
             </div>
             <div className="min-w-0 flex-1">
-              <h2 className="text-[15px] font-bold tracking-tight text-slate-100">Pengaturan</h2>
-              <p className="text-[12px] text-slate-500">Sinkronisasi & integrasi</p>
+              <h2 className="text-[15px] font-bold tracking-tight text-slate-100">{t('settings.title')}</h2>
+              <p className="text-[12px] text-slate-500">{t('settings.subtitle')}</p>
             </div>
             <button
               onClick={() => setSettingsOpen(false)}
-              title="Tutup"
+              title={t('common.close')}
               className="rounded-md p-1.5 text-slate-500 transition-colors hover:bg-white/10 hover:text-slate-200"
             >
               <X className="h-4 w-4" />
@@ -103,21 +104,21 @@ export default function Settings() {
           <div className="space-y-5 px-5 py-5">
             <div>
               <h3 className="mb-1 flex items-center gap-2 text-[13px] font-semibold text-slate-200">
-                <CloudUpload className="h-4 w-4 text-sky-400" /> Sinkronisasi Nextcloud (WebDAV)
+                <CloudUpload className="h-4 w-4 text-sky-400" /> {t('settings.webdav')}
               </h3>
               <p className="text-[12px] leading-relaxed text-slate-500">
-                Semua catatan (.md) akan diunggah otomatis ke folder{' '}
+                {t('settings.webdavDesc')}{' '}
                 <code className="rounded bg-slate-900 px-1 py-0.5 font-mono text-[11px] text-sky-400">
                   /{path || 'DevNotes'}
                 </code>{' '}
-                di server Nextcloud Anda saat tombol Sinkron ditekan.
+                {t('settings.webdavDesc2')}
               </p>
             </div>
 
             <form onSubmit={onSave} className="space-y-3">
               <div>
                 <label className="mb-1 block text-[12px] font-medium text-slate-400">
-                  URL Server Nextcloud
+                  {t('settings.server')}
                 </label>
                 <input
                   value={server}
@@ -127,24 +128,28 @@ export default function Settings() {
                   className={inputCls}
                 />
                 <p className="mt-1 text-[11px] text-slate-600">
-                  Cukup isi host (mis. <span className="font-mono">https://cloud.example.com</span>).
-                  Path <span className="font-mono">/remote.php/dav/files/&lt;username&gt;</span> dibuat
-                  otomatis. Kalau sudah memuat path lengkap, tetap bisa.
+                  {t('settings.serverHint')}{' '}
+                  <span className="font-mono">https://cloud.example.com</span>
+                  {t('settings.serverHint2')}{' '}
+                  <span className="font-mono">/remote.php/dav/files/&lt;username&gt;</span>{' '}
+                  {t('settings.serverHint3')}
                 </p>
               </div>
               <div>
-                <label className="mb-1 block text-[12px] font-medium text-slate-400">Username</label>
+                <label className="mb-1 block text-[12px] font-medium text-slate-400">
+                  {t('settings.username')}
+                </label>
                 <input
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
-                  placeholder="username nextcloud"
+                  placeholder={t('settings.usernamePlaceholder')}
                   autoComplete="username"
                   className={inputCls}
                 />
               </div>
               <div>
                 <label className="mb-1 flex items-center gap-1 text-[12px] font-medium text-slate-400">
-                  <Lock className="h-3 w-3" /> Password (App Password disarankan)
+                  <Lock className="h-3 w-3" /> {t('settings.password')}
                 </label>
                 <div className="relative">
                   <input
@@ -152,7 +157,9 @@ export default function Settings() {
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder={
-                      nextcloud?.hasPassword && !password ? '•••••••• (tersimpan)' : 'password'
+                      nextcloud?.hasPassword && !password
+                        ? t('settings.passwordSaved')
+                        : t('settings.passwordPlaceholder')
                     }
                     autoComplete="current-password"
                     className={inputCls + ' pr-10'}
@@ -168,7 +175,7 @@ export default function Settings() {
               </div>
               <div>
                 <label className="mb-1 flex items-center gap-1 text-[12px] font-medium text-slate-400">
-                  <FolderInput className="h-3 w-3" /> Folder tujuan di Nextcloud
+                  <FolderInput className="h-3 w-3" /> {t('settings.folder')}
                 </label>
                 <input
                   value={path}
@@ -203,7 +210,7 @@ export default function Settings() {
                   ) : (
                     <PlugZap className="h-3.5 w-3.5" />
                   )}
-                  Tes Koneksi
+                  {t('settings.test')}
                 </button>
                 <button
                   type="submit"
@@ -215,7 +222,7 @@ export default function Settings() {
                   ) : (
                     <Save className="h-3.5 w-3.5" />
                   )}
-                  Simpan
+                  {t('common.save')}
                 </button>
               </div>
             </form>
@@ -223,7 +230,7 @@ export default function Settings() {
             {/* Last sync */}
             <div className="rounded-xl border border-slate-800 bg-slate-900/40 p-4">
               <div className="mb-2 flex items-center justify-between">
-                <span className="text-[12px] font-semibold text-slate-300">Sinkronisasi Terakhir</span>
+                <span className="text-[12px] font-semibold text-slate-300">{t('settings.lastSync')}</span>
                 <button
                   onClick={onSync}
                   disabled={busy || syncing}
@@ -234,7 +241,7 @@ export default function Settings() {
                   ) : (
                     <CloudUpload className="h-3.5 w-3.5" />
                   )}
-                  {syncing || busy === 'sync' ? 'Menyinkronkan...' : 'Sinkron Sekarang'}
+                  {syncing || busy === 'sync' ? t('settings.syncing') : t('settings.syncNow')}
                 </button>
               </div>
               {syncResult ? (
@@ -244,7 +251,7 @@ export default function Settings() {
                       <span className="text-emerald-400">{syncResult.message}</span>
                       {syncResult.failed?.length > 0 && (
                         <div className="mt-1 text-rose-400">
-                          {syncResult.failed.length} file gagal:
+                          {t('settings.failed', { n: syncResult.failed.length })}
                           <ul className="ml-4 list-disc">
                             {syncResult.failed.slice(0, 5).map((f, i) => (
                               <li key={i}>
@@ -260,10 +267,7 @@ export default function Settings() {
                   )}
                 </div>
               ) : (
-                <div className="text-[12px] text-slate-600">
-                  Belum ada sinkronisasi. Simpan konfigurasi lalu tekan "Sinkron Sekarang" atau
-                  tombol Sinkron di pojok kiri bawah.
-                </div>
+                <div className="text-[12px] text-slate-600">{t('settings.noSync')}</div>
               )}
             </div>
           </div>
