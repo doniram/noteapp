@@ -87,6 +87,16 @@ export const api = {
   },
   attachmentRaw: (id) => `${BASE}/attachments/${id}/raw`,
 
+  getTasksBoard: () => req('/tasks/board'),
+  createTaskStatus: (data) => req('/task-statuses', json('POST', data)),
+  updateTaskStatus: (id, data) => req(`/task-statuses/${id}`, json('PUT', data)),
+  reorderTaskStatuses: (ids) => req('/task-statuses/reorder', json('POST', { ids })),
+  deleteTaskStatus: (id) => req(`/task-statuses/${id}`, { method: 'DELETE' }),
+  createTask: (data) => req('/tasks', json('POST', data)),
+  updateTask: (id, data) => req(`/tasks/${id}`, json('PUT', data)),
+  reorderTasks: (items) => req('/tasks/reorder', json('POST', { items })),
+  deleteTask: (id) => req(`/tasks/${id}`, { method: 'DELETE' }),
+
   getNextcloudSettings: () => req('/settings/nextcloud'),
   saveNextcloudSettings: (cfg) => req('/settings/nextcloud', json('PUT', cfg)),
   testNextcloud: (cfg) => req('/nextcloud/test', json('POST', cfg)),

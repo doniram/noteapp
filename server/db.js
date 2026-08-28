@@ -79,6 +79,28 @@ CREATE TABLE IF NOT EXISTS note_sync (
   synced_at TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS task_statuses (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  color TEXT NOT NULL DEFAULT '#8b5cf6',
+  position INTEGER NOT NULL DEFAULT 0,
+  user_id TEXT NOT NULL DEFAULT '',
+  created_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS tasks (
+  id TEXT PRIMARY KEY,
+  title TEXT NOT NULL,
+  content TEXT NOT NULL DEFAULT '',
+  status_id TEXT REFERENCES task_statuses(id) ON DELETE CASCADE,
+  position INTEGER NOT NULL DEFAULT 0,
+  user_id TEXT NOT NULL DEFAULT '',
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS tasks_status_position ON tasks(status_id, position);
+
 CREATE VIRTUAL TABLE IF NOT EXISTS notes_fts USING fts5(
   title, content,
   content='notes',

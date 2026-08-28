@@ -38,6 +38,7 @@ export function AppProvider({ children }) {
   const [nextcloud, setNextcloud] = useState(null)
   const [syncing, setSyncing] = useState(false)
   const [syncResult, setSyncResult] = useState(null)
+  const [view, setView] = useState('notes') // 'notes' | 'tasks'
   const [isMobile, setIsMobile] = useState(
     () => typeof window !== 'undefined' && window.matchMedia('(max-width: 767px)').matches
   )
@@ -347,6 +348,7 @@ export function AppProvider({ children }) {
     setLoading(true)
     setSessionExpiring(false)
     setSessionCountdown(SESSION_WARN_SECONDS)
+    setView('notes')
   }
 
   // ----- auto logout saat tidak ada aktivitas (idle timeout) -----
@@ -504,6 +506,8 @@ export function AppProvider({ children }) {
     sessionExpiring,
     sessionCountdown,
     continueSession,
+    view,
+    setView,
   }
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>

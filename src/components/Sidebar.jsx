@@ -24,6 +24,7 @@ import {
   Layers,
   Trash2,
   Pencil,
+  ListTodo,
 } from 'lucide-react'
 import { useApp } from '../context/useApp'
 
@@ -97,10 +98,17 @@ export default function Sidebar() {
     isMobile,
     setSidebarOpen,
     setSettingsOpen,
+    view,
+    setView,
   } = useApp()
 
   const closeMobile = () => {
     if (isMobile) setSidebarOpen(false)
+  }
+
+  const goNotes = () => {
+    setView('notes')
+    closeMobile()
   }
 
   const countInFolder = (id) => notes.filter((n) => n.folderId === id).length
@@ -111,6 +119,7 @@ export default function Sidebar() {
     setActiveFolder(null)
     setActiveTag(null)
     setActiveId(null)
+    setView('notes')
     closeMobile()
   }
 
@@ -171,20 +180,28 @@ export default function Sidebar() {
           </button>
         </section>
 
+        <section>
+          <Row active={view === 'tasks'} onClick={() => { setView('tasks'); closeMobile() }}>
+            <ListTodo className="h-4 w-4 shrink-0 text-emerald-400" />
+            <span className="flex-1 font-medium">Tugas</span>
+            <span className="text-[11px] text-slate-600">board</span>
+          </Row>
+        </section>
+
         <nav className="space-y-0.5">
-          <Row active={!activeFolder && !activeTag} onClick={selectAll}>
+          <Row active={view === 'notes' && !activeFolder && !activeTag} onClick={selectAll}>
             <FolderOpen className="h-4 w-4 shrink-0 text-sky-400" />
             <span className="flex-1 font-medium">Semua Catatan</span>
             <span className="text-[11px] text-slate-600">{notes.length}</span>
           </Row>
 
           <Row
-            active={activeTag === null && activeFolder === 'pinned'}
+            active={view === 'notes' && activeTag === null && activeFolder === 'pinned'}
             onClick={() => {
               setActiveTag(null)
               setActiveFolder('pinned')
               setActiveId(null)
-              closeMobile()
+              goNotes()
             }}
           >
             <Pin className="h-4 w-4 shrink-0 text-amber-400" />
@@ -209,12 +226,12 @@ export default function Sidebar() {
           </div>
           <div className="space-y-0.5">
             <Row
-              active={activeFolder === 'none'}
+              active={view === 'notes' && activeFolder === 'none'}
               onClick={() => {
                 setActiveFolder('none')
                 setActiveTag(null)
                 setActiveId(null)
-                closeMobile()
+                goNotes()
               }}
             >
               <FileText className="h-4 w-4 shrink-0 text-slate-500" />
@@ -232,7 +249,7 @@ export default function Sidebar() {
                       setActiveFolder(folder.id)
                       setActiveTag(null)
                       setActiveId(null)
-                      closeMobile()
+                      goNotes()
                     }}
                     className={`flex w-full min-w-0 items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px] transition-colors ${
                       active
@@ -292,14 +309,14 @@ export default function Sidebar() {
             {tags.map((tag) => {
               const active = activeTag === tag.id && activeFolder === null
               return (
-                <button
-                  key={tag.id}
-                  onClick={() => {
-                    setActiveTag(active ? null : tag.id)
-                    setActiveFolder(null)
-                    setActiveId(null)
-                    closeMobile()
-                  }}
+                  <button
+                    key={tag.id}
+                    onClick={() => {
+                      setActiveTag(active ? null : tag.id)
+                      setActiveFolder(null)
+                      setActiveId(null)
+                      goNotes()
+                    }}
                   className={`flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium transition-colors ${
                     active
                       ? 'border-slate-600 bg-white/10 text-slate-100'

@@ -47,6 +47,8 @@ body {
 :root.light .bg-\[\#0b0f14\] { background-color: #f8fafc; }
 :root.light .bg-\[\#0d141d\] { background-color: #ffffff; }
 :root.light .bg-\[\#0b111a\] { background-color: #eef2f7; }
+:root.light .bg-\[\#0f171f\] { background-color: #f8fafc; }
+:root.light .hover\:bg-\[\#101a24\]:hover { background-color: #eef2f7; }
 :root.light .bg-slate-900 { background-color: #e2e8f0; }
 :root.light .bg-slate-900\/70 { background-color: rgb(255 255 255 / 0.8); }
 :root.light .bg-slate-900\/60 { background-color: #ffffff; }

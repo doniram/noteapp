@@ -510,6 +510,184 @@ app.get('/api/attachments/:id/raw', (req, res) => {
   res.sendFile(row.path)
 })
 
+// ---------- tasks board ----------
+const DEFAULT_STATUS_COLORS = ['#8b5cf6', '#f59e0b', '#38bdf8', '#10b981', '#ec4899', '#64748b']
+
+seedDefaultStatuses(adminId)
+
+const rowToStatus = (r) => ({
+  id: r.id,
+  name: r.name,
+  color: r.color,
+  position: r.position,
+  createdAt: r.created_at,
+})
+
+const rowToTask = (r) => ({
+  id: r.id,
+  title: r.title,
+  content: r.content,
+  statusId: r.status_id,
+  position: r.position,
+  createdAt: r.created_at,
+  updatedAt: r.updated_at,
+})
+
+function seedDefaultStatuses(userId) {
+  const { count } = db
+    .prepare('SELECT COUNT(*) AS count FROM task_statuses WHERE user_id = ?')
+    .get(userId)
+  if (count > 0) return
+  const insert = db.prepare(
+    'INSERT INTO task_statuses (id, name, color, position, user_id, created_at) VALUES (?, ?, ?, ?, ?, ?)'
+  )
+  const defaults = ['To-do', 'In progress', 'In review', 'Complete']
+  const now = new Date().toISOString()
+  const tx = db.transaction(() => {
+    defaults.forEach((name, i) => {
+      insert.run(id(), name, DEFAULT_STATUS_COLORS[i % DEFAULT_STATUS_COLORS.length], i, userId, now)
+    })
+  })
+  tx()
+}
+
+app.get('/api/tasks/board', (req, res) => {
+  const columns = db
+    .prepare('SELECT * FROM task_statuses WHERE user_id = ? ORDER BY position ASC, created_at ASC')
+    .all(req.user.id)
+  const tasks = db
+    .prepare('SELECT * FROM tasks WHERE user_id = ? ORDER BY position ASC, created_at ASC')
+    .all(req.user.id)
+  res.json({ columns: columns.map(rowToStatus), tasks: tasks.map(rowToTask) })
+})
+
+app.post('/api/task-statuses', (req, res) => {
+  const name = String(req.body?.name ?? '').trim()
+  if (!name) return res.status(400).json({ error: 'Nama kolom wajib diisi' })
+  const { pos } = db
+    .prepare('SELECT COALESCE(MAX(position), -1) + 1 AS pos FROM task_statuses WHERE user_id = ?')
+    .get(req.user.id)
+  const row = {
+    id: id(),
+    name,
+    color: String(req.body?.color ?? DEFAULT_STATUS_COLORS[0]),
+    position: pos,
+    created_at: new Date().toISOString(),
+    user_id: req.user.id,
+  }
+  db.prepare(
+    'INSERT INTO task_statuses (id, name, color, position, user_id, created_at) VALUES (?, ?, ?, ?, ?, ?)'
+  ).run(row.id, row.name, row.color, row.position, row.user_id, row.created_at)
+  res.status(201).json(rowToStatus(row))
+})
+
+app.post('/api/task-statuses/reorder', (req, res) => {
+  const ids = Array.isArray(req.body?.ids) ? req.body.ids : []
+  const upd = db.prepare(
+    'UPDATE task_statuses SET position = ? WHERE id = ? AND user_id = ?'
+  )
+  const tx = db.transaction(() => {
+    ids.forEach((cid, i) => upd.run(i, cid, req.user.id))
+  })
+  tx()
+  res.json({ ok: true })
+})
+
+app.put('/api/task-statuses/:id', (req, res) => {
+  const name = req.body?.name !== undefined ? String(req.body.name).trim() : undefined
+  const color = req.body?.color !== undefined ? String(req.body.color) : undefined
+  const r = db
+    .prepare(
+      'UPDATE task_statuses SET name = COALESCE(?, name), color = COALESCE(?, color) WHERE id = ? AND user_id = ?'
+    )
+    .run(name || null, color || null, req.params.id, req.user.id)
+  if (!r.changes) return res.status(404).json({ error: 'Kolom tidak ditemukan' })
+  const row = db.prepare('SELECT * FROM task_statuses WHERE id = ?').get(req.params.id)
+  res.json(rowToStatus(row))
+})
+
+app.delete('/api/task-statuses/:id', (req, res) => {
+  db.prepare('DELETE FROM task_statuses WHERE id = ? AND user_id = ?').run(
+    req.params.id,
+    req.user.id
+  )
+  res.json({ ok: true })
+})
+
+app.post('/api/tasks', (req, res) => {
+  const title = String(req.body?.title ?? '').trim()
+  const statusId = String(req.body?.statusId ?? '')
+  if (!title) return res.status(400).json({ error: 'Judul tugas wajib diisi' })
+  const status = db
+    .prepare('SELECT id FROM task_statuses WHERE id = ? AND user_id = ?')
+    .get(statusId, req.user.id)
+  if (!status) return res.status(404).json({ error: 'Kolom tidak ditemukan' })
+  const { pos } = db
+    .prepare('SELECT COALESCE(MAX(position), -1) + 1 AS pos FROM tasks WHERE status_id = ?')
+    .get(statusId)
+  const now = new Date().toISOString()
+  const row = {
+    id: id(),
+    title,
+    content: String(req.body?.content ?? ''),
+    status_id: statusId,
+    position: pos,
+    user_id: req.user.id,
+    created_at: now,
+    updated_at: now,
+  }
+  db.prepare(
+    'INSERT INTO tasks (id, title, content, status_id, position, user_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+  ).run(row.id, row.title, row.content, row.status_id, row.position, row.user_id, row.created_at, row.updated_at)
+  res.status(201).json(rowToTask(row))
+})
+
+app.put('/api/tasks/:id', (req, res) => {
+  const existing = db
+    .prepare('SELECT * FROM tasks WHERE id = ? AND user_id = ?')
+    .get(req.params.id, req.user.id)
+  if (!existing) return res.status(404).json({ error: 'Tugas tidak ditemukan' })
+  const title = req.body?.title !== undefined ? String(req.body.title).trim() : existing.title
+  const content = req.body?.content !== undefined ? String(req.body.content) : existing.content
+  const now = new Date().toISOString()
+  db.prepare('UPDATE tasks SET title = ?, content = ?, updated_at = ? WHERE id = ? AND user_id = ?').run(
+    title || existing.title,
+    content,
+    now,
+    req.params.id,
+    req.user.id
+  )
+  res.json(rowToTask({ ...existing, title, content, updated_at: now }))
+})
+
+app.post('/api/tasks/reorder', (req, res) => {
+  const items = Array.isArray(req.body?.items) ? req.body.items : []
+  const upd = db.prepare(
+    'UPDATE tasks SET status_id = ?, position = ? WHERE id = ? AND user_id = ?'
+  )
+  const tx = db.transaction(() => {
+    for (const it of items) {
+      const t = db
+        .prepare('SELECT * FROM tasks WHERE id = ? AND user_id = ?')
+        .get(it.id, req.user.id)
+      if (!t) continue
+      const statusId = it.statusId ?? t.status_id
+      const status = db
+        .prepare('SELECT id FROM task_statuses WHERE id = ? AND user_id = ?')
+        .get(statusId, req.user.id)
+      if (!status) continue
+      upd.run(statusId, Number(it.position) || 0, it.id, req.user.id)
+    }
+  })
+  tx()
+  res.json({ ok: true })
+})
+
+app.delete('/api/tasks/:id', (req, res) => {
+  db.prepare('DELETE FROM tasks WHERE id = ? AND user_id = ?').run(req.params.id, req.user.id)
+  res.json({ ok: true })
+})
+
 // ---------- settings ----------
 app.get('/api/settings/nextcloud', (req, res) => {
   res.json(getStoredWebdavPublic(req.user.id))
