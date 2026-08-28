@@ -15,7 +15,11 @@ import {
   Bold,
   Italic,
   Strikethrough,
+  Heading1,
   Heading2,
+  Heading3,
+  Heading4,
+  Highlighter,
   Quote,
   Code2,
   Code,
@@ -50,7 +54,10 @@ const toolbar = [
   { icon: Italic, title: 'Miring', kind: 'wrap', args: ['*', '*', 'teks miring'] },
   { icon: Strikethrough, title: 'Coret', kind: 'wrap', args: ['~~', '~~', 'teks'] },
   null,
-  { icon: Heading2, title: 'Judul', kind: 'line', args: ['## '] },
+  { icon: Heading1, title: 'Judul 1', kind: 'line', args: ['# '] },
+  { icon: Heading2, title: 'Judul 2', kind: 'line', args: ['## '] },
+  { icon: Heading3, title: 'Judul 3', kind: 'line', args: ['### '] },
+  { icon: Heading4, title: 'Judul 4', kind: 'line', args: ['#### '] },
   { icon: Quote, title: 'Kutipan', kind: 'line', args: ['> '] },
   null,
   { icon: Code2, title: 'Kode inline', kind: 'wrap', args: ['`', '`', 'kode'] },
@@ -58,6 +65,8 @@ const toolbar = [
   null,
   { icon: Link2, title: 'Link', kind: 'wrap', args: ['[', '](https://)', 'teks link'] },
   { icon: Image, title: 'Gambar', kind: 'wrap', args: ['![', '](https://)', 'alt text'] },
+  null,
+  { icon: Highlighter, title: 'Sorotan', kind: 'wrap', args: ['==', '==', 'teks sorotan'] },
   null,
   { icon: List, title: 'List', kind: 'line', args: ['- '] },
   { icon: ListOrdered, title: 'List nomor', kind: 'line', args: ['1. '] },
@@ -415,11 +424,17 @@ export default function Editor() {
                 window.open(a.href, '_blank')
               }
             }}
-            className={`min-w-0 overflow-y-auto bg-[#0b0f14] p-6 ${
+            className={`min-w-0 overflow-y-auto bg-[#0b0f14] ${
               effectiveMode === 'split' ? 'flex-1' : 'w-full'
             }`}
           >
-            <Markdown content={note.content} />
+            <div
+              className={`px-6 py-6 ${
+                effectiveMode === 'split' ? '' : 'mx-auto w-full max-w-3xl'
+              }`}
+            >
+              <Markdown content={note.content} />
+            </div>
           </div>
         )}
       </div>

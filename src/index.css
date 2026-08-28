@@ -140,6 +140,13 @@ body {
 .markdown-body a { color: #0284c7; text-decoration: underline; text-underline-offset: 2px; }
 .markdown-body a:hover { color: #0369a1; }
 
+.markdown-body mark {
+  background: #fde68a;
+  color: #78350f;
+  padding: 0.05em 0.2em;
+  border-radius: 4px;
+}
+
 .markdown-body strong { color: #0f172a; font-weight: 600; }
 .markdown-body em { font-style: italic; }
 
@@ -229,6 +236,11 @@ body {
 
 :root.dark .markdown-body a { color: #7dd3fc; }
 :root.dark .markdown-body a:hover { color: #bae6fd; }
+
+:root.dark .markdown-body mark {
+  background: rgb(250 204 21 / 0.2);
+  color: #fde047;
+}
 :root.dark .markdown-body strong { color: #f1f5f9; }
 
 :root.dark .markdown-body code {
