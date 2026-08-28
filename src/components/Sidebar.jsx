@@ -184,7 +184,6 @@ export default function Sidebar() {
           <Row active={view === 'tasks'} onClick={() => { setView('tasks'); closeMobile() }}>
             <ListTodo className="h-4 w-4 shrink-0 text-emerald-400" />
             <span className="flex-1 font-medium">Tugas</span>
-            <span className="text-[11px] text-slate-600">board</span>
           </Row>
         </section>
 
