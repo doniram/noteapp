@@ -20,6 +20,7 @@ import DeleteFolderModal from './components/DeleteFolderModal'
 import TagModal from './components/TagModal'
 import Login from './components/Login'
 import Settings from './components/Settings'
+import TasksBoard from './components/TasksBoard'
 
 function KeyboardShortcuts() {
   const { setPaletteOpen } = useApp()
@@ -100,7 +101,28 @@ function Workspace() {
     sidebarOpen,
     setSidebarOpen,
     activeId,
+    view,
   } = useApp()
+  if (view === 'tasks') {
+    return (
+      <div className="flex h-full">
+        {isMobile ? (
+          sidebarOpen && (
+            <>
+              <div
+                className="fixed inset-0 z-30 bg-black/60 backdrop-blur-sm"
+                onClick={() => setSidebarOpen(false)}
+              />
+              <Sidebar />
+            </>
+          )
+        ) : (
+          <Sidebar />
+        )}
+        <TasksBoard />
+      </div>
+    )
+  }
   return (
     <div className="flex h-full">
       {isMobile ? (
