@@ -381,6 +381,18 @@ export default function Sidebar() {
           </span>
         )}
       </div>
+
+      <div className="flex items-center justify-center border-t border-slate-800/70 px-3 py-2 text-[10px] text-slate-600">
+        Develop By :{' '}
+        <a
+          href="https://pionevo.id"
+          target="_blank"
+          rel="noreferrer"
+          className="ml-1 font-semibold text-slate-400 transition-colors hover:text-sky-300 hover:underline"
+        >
+          Pionevo.id
+        </a>
+      </div>
     </aside>
   )
 }

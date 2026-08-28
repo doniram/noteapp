@@ -78,9 +78,19 @@ export default function Login() {
               {t('login.submit')}
             </button>
           </form>
-
-          
         </div>
+
+        <p className="mt-8 text-center text-[12px] text-slate-600">
+          Develop By :{' '}
+          <a
+            href="https://pionevo.id"
+            target="_blank"
+            rel="noreferrer"
+            className="font-semibold text-slate-400 transition-colors hover:text-sky-300 hover:underline"
+          >
+            Pionevo.id
+          </a>
+        </p>
       </div>
     </div>
   )
