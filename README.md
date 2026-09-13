@@ -169,7 +169,7 @@ docker run -d --name devnotes \
 
 ### Aksi server mandiri (opsional)
 
-Jika ingin berjalan sebagai service systemd di VPS:
+Jika ingin berjalan sebagai service systemd di VPS (virtual private server):
 
 ```ini
 # /etc/systemd/system/devnotes.service
