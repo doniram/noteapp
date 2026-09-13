@@ -1,0 +1,52 @@
+name: CD - Deploy to Production
+on:
+  workflow_run:
+    workflows: CI
+    types: [completed]
+env:
+  IMAGE_OWNER: ${{ github.repository_owner }}
+  IMAGE_REPO: ${{ github.event.repository.name }}
+  TAG: ${{ github.event.workflow_run.head_sha }}
+jobs:
+  deploy:
+    name: Deploy ke Server
+    if: github.event.workflow_run.conclusion == 'success'
+    runs-on: self-hosted
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      - name: Kirim docker-compose.prod.yml ke server
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          source: "docker-compose.prod.yml"
+          target: "/home/${{ secrets.SSH_USER }}/app"
+
+      - name: Deploy & cek kesehatan aplikasi
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            cd /home/${{ secrets.SSH_USER }}/app
+
+            echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+
+            export GHCR_OWNER=${{ env.IMAGE_OWNER }}
+            export GHCR_REPO=${{ env.IMAGE_REPO }}
+            export TAG=${{ env.TAG }}
+
+            docker compose -f docker-compose.prod.yml pull
+            docker compose -f docker-compose.prod.yml up -d
+            docker image prune -f
+
+            sleep 5
+            curl -f http://localhost/api/health || exit 1
