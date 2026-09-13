@@ -49,4 +49,4 @@ jobs:
             docker image prune -f
 
             sleep 5
-            curl -f http://localhost/api/health || exit 1
+            curl -f http://localhost/api/health:4000 || exit 1
