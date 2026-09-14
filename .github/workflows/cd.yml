@@ -28,7 +28,7 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: 2222
           source: "docker-compose.prod.yml"
-          target: "/home/${{ secrets.SSH_USER }}/app"
+          target: "/opt/devnotes/app"
 
       - name: Deploy & cek kesehatan aplikasi
         uses: appleboy/ssh-action@v1.0.3
@@ -36,8 +36,9 @@ jobs:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 2222
           script: |
-            cd /opt/devnotes/${{ secrets.SSH_USER }}/app
+            cd /opt/devnotes/app
 
             echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
 
