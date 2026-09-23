@@ -248,7 +248,26 @@ export default function Settings() {
                 <div className="text-[12px] leading-relaxed text-slate-400">
                   {syncResult.ok ? (
                     <>
-                      <span className="text-emerald-400">{syncResult.message}</span>
+                      <div className="flex flex-wrap gap-x-3 gap-y-1">
+                        <span className="text-emerald-400">
+                          {t('settings.uploadedCount', { n: syncResult.uploaded || 0 })}
+                        </span>
+                        {!!syncResult.moved && (
+                          <span className="text-sky-400">
+                            {t('settings.moved', { n: syncResult.moved })}
+                          </span>
+                        )}
+                        {!!syncResult.deleted && (
+                          <span className="text-amber-400">
+                            {t('settings.deleted', { n: syncResult.deleted })}
+                          </span>
+                        )}
+                        {!!syncResult.attachments && (
+                          <span className="text-indigo-400">
+                            {t('settings.attachmentCount', { n: syncResult.attachments })}
+                          </span>
+                        )}
+                      </div>
                       {syncResult.failed?.length > 0 && (
                         <div className="mt-1 text-rose-400">
                           {t('settings.failed', { n: syncResult.failed.length })}

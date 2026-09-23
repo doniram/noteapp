@@ -19,6 +19,7 @@ import FolderModal from './components/FolderModal'
 import DeleteFolderModal from './components/DeleteFolderModal'
 import TagModal from './components/TagModal'
 import Login from './components/Login'
+import LockScreen from './components/LockScreen'
 import Settings from './components/Settings'
 import TasksBoard from './components/TasksBoard'
 
@@ -309,7 +310,7 @@ function SessionTimeoutModal() {
 }
 
 function AppShell() {
-  const { user, authLoading, settingsOpen } = useApp()
+  const { user, authLoading, settingsOpen, locked } = useApp()
   if (authLoading) return <SplashScreen />
   if (!user) return <Login />
   return (
@@ -322,7 +323,8 @@ function AppShell() {
       <DeleteFolderModal />
       <TagModal />
       {settingsOpen && <Settings />}
-      <SessionTimeoutModal />
+      {!locked && <SessionTimeoutModal />}
+      {locked && <LockScreen />}
     </>
   )
 }

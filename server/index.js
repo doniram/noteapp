@@ -1,5 +1,6 @@
 import 'dotenv/config'
 import express from 'express'
+import helmet from 'helmet'
 import rateLimit from 'express-rate-limit'
 import multer from 'multer'
 import jwt from 'jsonwebtoken'
@@ -16,10 +17,50 @@ const UPLOAD_DIR = process.env.UPLOAD_DIR || path.join(__dirname, 'uploads')
 const JWT_SECRET = process.env.JWT_SECRET || 'devnotes-dev-secret-change-me'
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin123'
 const ENC_KEY = crypto.createHash('sha256').update(JWT_SECRET).digest()
+
+// Jangan pernah menjalankan produksi dengan kredensial default: siapa pun yang
+// tahu default bisa login, memalsukan JWT, dan mendekripsi password WebDAV.
+if (process.env.NODE_ENV === 'production') {
+  const problems = []
+  if (!process.env.JWT_SECRET || JWT_SECRET === 'devnotes-dev-secret-change-me') {
+    problems.push('JWT_SECRET')
+  }
+  if (!process.env.ADMIN_PASSWORD || ADMIN_PASSWORD === 'admin123') {
+    problems.push('ADMIN_PASSWORD')
+  }
+  if (problems.length) {
+    console.error(
+      `[FATAL] Set ${problems.join(' & ')} ke nilai acak/kuat sebelum menjalankan di produksi. Server dihentikan.`
+    )
+    process.exit(1)
+  }
+}
+
 fs.mkdirSync(UPLOAD_DIR, { recursive: true })
 
 const app = express()
+app.disable('x-powered-by')
 app.set('trust proxy', process.env.TRUST_PROXY === '1' ? 1 : false)
+app.use(
+  helmet({
+    frameguard: { action: 'deny' },
+    crossOriginEmbedderPolicy: false,
+    contentSecurityPolicy: {
+      useDefaults: true,
+      directives: {
+        'script-src': ["'self'"],
+        'style-src': ["'self'", "'unsafe-inline'"],
+        'img-src': ["'self'", 'data:', 'blob:', 'https:'],
+        'connect-src': ["'self'"],
+        'object-src': ["'none'"],
+        'base-uri': ["'self'"],
+        'frame-ancestors': ["'none'"],
+        // Biarkan deploy HTTP/internal tetap bekerja; HSTS tetap aktif di HTTPS.
+        'upgrade-insecure-requests': null,
+      },
+    },
+  })
+)
 app.use(express.json({ limit: '10mb' }))
 
 const LOGIN_MAX = Number(process.env.LOGIN_RATE_MAX || 10)
@@ -44,9 +85,10 @@ const signToken = (user) =>
 
 function requireAuth(req, res, next) {
   const header = req.headers.authorization || ''
-  const token = header.startsWith('Bearer ')
-    ? header.slice(7)
-    : String(req.query?.token || '')
+  let token = header.startsWith('Bearer ') ? header.slice(7) : ''
+  // Token lewat query hanya untuk endpoint lampiran (dipakai oleh tag <img>,
+  // yang tidak bisa mengirim header Authorization).
+  if (!token && isAttachmentRequest(req)) token = String(req.query?.token || '')
   if (!token) return res.status(401).json({ error: 'Tidak terautentikasi' })
   try {
     const payload = jwt.verify(token, JWT_SECRET)
@@ -55,6 +97,11 @@ function requireAuth(req, res, next) {
   } catch {
     return res.status(401).json({ error: 'Sesi berakhir, silakan login ulang' })
   }
+}
+
+function isAttachmentRequest(req) {
+  const url = req.originalUrl || req.url || ''
+  return url.startsWith('/api/attachments/') || url.startsWith('/attachments/')
 }
 
 function getTagsForNotes(noteIds) {
@@ -108,7 +155,7 @@ function queryNotes({ userId, search, folder, tag, sort, limit }) {
   const where = ['n.user_id = ?']
   const params = [userId]
 
-  if (search) {
+  if (search && search.trim()) {
     where.push('n.rowid IN (SELECT rowid FROM notes_fts WHERE notes_fts MATCH ?)')
     params.push(ftsMatch(search))
   }
@@ -176,6 +223,13 @@ function parseNoteBody(body, existing = {}) {
     folder_id: body.folderId !== undefined ? body.folderId : existing.folderId,
     pinned: body.pinned !== undefined ? (body.pinned ? 1 : 0) : existing.pinned ? 1 : 0,
   }
+}
+
+// Hanya izinkan folder_id milik pengguna (atau null), jangan percaya input mentah.
+function ownedFolderId(folderId, userId) {
+  if (!folderId) return null
+  const row = db.prepare('SELECT id FROM folders WHERE id = ? AND user_id = ?').get(folderId, userId)
+  return row ? folderId : null
 }
 
 // ---------- nextcloud / webdav ----------
@@ -402,6 +456,7 @@ app.get('/api/notes/:id', (req, res) => {
 
 app.post('/api/notes', (req, res) => {
   const b = parseNoteBody(req.body)
+  b.folder_id = ownedFolderId(b.folder_id, req.user.id)
   const now = new Date().toISOString()
   const noteId = String(req.body?.id || id())
   db.prepare(
@@ -422,6 +477,7 @@ app.put('/api/notes/:id', (req, res) => {
     folderId: existing.folder_id,
     pinned: existing.pinned,
   })
+  b.folder_id = ownedFolderId(b.folder_id, req.user.id)
   const now = new Date().toISOString()
   db.prepare(
     'UPDATE notes SET title = ?, content = ?, folder_id = ?, pinned = ?, updated_at = ? WHERE id = ? AND user_id = ?'
@@ -446,6 +502,7 @@ const storage = multer.diskStorage({
 const upload = multer({ storage, limits: { fileSize: 20 * 1024 * 1024 } })
 
 app.post('/api/notes/:id/attachments', upload.single('file'), (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'File wajib diunggah' })
   const noteId = req.params.id
   if (!db.prepare('SELECT id FROM notes WHERE id = ? AND user_id = ?').get(noteId, req.user.id)) {
     fs.rmSync(req.file.path, { force: true })
@@ -756,61 +813,177 @@ app.post('/api/nextcloud/sync', async (req, res) => {
         .map((f) => [f.id, f.name])
     )
 
+    // Path tujuan tiap catatan: <base>/[<Folder>/]<judul>.md (deterministik + anti-bentrok).
+    const desiredByNote = new Map()
+    const desiredDirs = new Set([base])
     const used = new Map()
-    const createdDirs = new Set([base])
-    const syncedMap = new Map(
-      db
-        .prepare('SELECT note_id, synced_at FROM note_sync WHERE user_id = ?')
-        .all(req.user.id)
-        .map((r) => [r.note_id, r.synced_at])
-    )
-    const upsertSync = db.prepare(
-      `INSERT INTO note_sync (note_id, user_id, synced_at) VALUES (?, ?, ?)
-       ON CONFLICT(note_id) DO UPDATE SET synced_at = excluded.synced_at`
-    )
-    let uploaded = 0
-    let skipped = 0
-    const failed = []
     for (const note of notes) {
-      const lastSync = syncedMap.get(note.id)
-      if (lastSync && note.updatedAt <= lastSync) {
-        skipped++
-        continue
-      }
-      let name = sanitizeName(note.title) || 'catatan'
-      name = name.slice(0, 80)
-      const key = name.toLowerCase()
+      const folderName = note.folderId ? sanitizeName(folderNames.get(note.folderId) || '') : ''
+      const dir = folderName ? `${base}/${folderName}` : base
+      desiredDirs.add(dir)
+      let name = (sanitizeName(note.title) || 'catatan').slice(0, 80)
+      const key = `${dir.toLowerCase()}\u0000${name.toLowerCase()}`
       if (used.has(key)) {
-        used.set(key, used.get(key) + 1)
-        name = `${name} (${used.get(key)})`
+        const n = used.get(key) + 1
+        used.set(key, n)
+        name = `${name} (${n})`
       } else {
         used.set(key, 0)
       }
-      const folderName = note.folderId ? sanitizeName(folderNames.get(note.folderId)) : ''
-      const dir = folderName ? `${base}/${folderName}` : base
-      const remotePath = `${dir}/${name}.md`
+      desiredByNote.set(note.id, `${dir}/${name}.md`)
+    }
+
+    const syncedMap = new Map(
+      db
+        .prepare('SELECT note_id, remote_path, synced_at FROM note_sync WHERE user_id = ?')
+        .all(req.user.id)
+        .map((r) => [r.note_id, r])
+    )
+    const upsertSync = db.prepare(
+      `INSERT INTO note_sync (note_id, user_id, remote_path, synced_at) VALUES (?, ?, ?, ?)
+       ON CONFLICT(note_id) DO UPDATE SET remote_path = excluded.remote_path, synced_at = excluded.synced_at`
+    )
+    const dropSync = db.prepare('DELETE FROM note_sync WHERE note_id = ?')
+
+    let uploaded = 0
+    let moved = 0
+    let skipped = 0
+    let deleted = 0
+    const failed = []
+
+    // ---- catatan: unggah isi baru, pindahkan saat judul/folder berubah ----
+    for (const note of notes) {
+      const desired = desiredByNote.get(note.id)
+      if (!desired) continue
+      const dir = desired.slice(0, desired.lastIndexOf('/'))
+      const prev = syncedMap.get(note.id)
+      const samePlace = prev?.remote_path === desired
+      if (samePlace && prev.synced_at >= note.updatedAt) {
+        skipped++
+        continue
+      }
       try {
-        if (!createdDirs.has(dir)) {
-          await client.createDirectory(dir, { recursive: true })
-          createdDirs.add(dir)
+        await client.createDirectory(dir, { recursive: true })
+        let didMove = false
+        if (prev?.remote_path && !samePlace) {
+          try {
+            await client.moveFile(prev.remote_path, desired, { overwrite: true })
+            didMove = true
+          } catch {
+            // file lama tidak ada di remote -> cukup unggah ulang di bawah
+          }
         }
-        await client.putFileContents(remotePath, note.content, {
-          overwrite: true,
-          contentLength: false,
-        })
-        upsertSync.run(note.id, req.user.id, note.updatedAt)
-        uploaded++
+        await client.putFileContents(desired, note.content, { overwrite: true, contentLength: false })
+        upsertSync.run(note.id, req.user.id, desired, note.updatedAt)
+        if (didMove) moved++
+        else uploaded++
       } catch (e) {
         failed.push({ title: note.title, error: e.message })
       }
     }
+
+    // ---- catatan yang sudah dihapus: hapus file remote-nya ----
+    const liveIds = new Set(notes.map((n) => n.id))
+    for (const [noteId, row] of syncedMap) {
+      if (liveIds.has(noteId)) continue
+      try {
+        if (row.remote_path) await client.deleteFile(row.remote_path)
+        dropSync.run(noteId)
+        deleted++
+      } catch (e) {
+        failed.push({ title: row.remote_path || noteId, error: e.message })
+      }
+    }
+
+    // ---- lampiran: unggah ke <base>/_attachments/<note-id>/<nama-file> ----
+    const attRows = db
+      .prepare(
+        `SELECT a.* FROM attachments a JOIN notes n ON n.id = a.note_id WHERE n.user_id = ?`
+      )
+      .all(req.user.id)
+    const desiredAtt = new Map()
+    const desiredAttDirs = new Set()
+    for (const a of attRows) {
+      const dir = `${base}/_attachments/${a.note_id}`
+      desiredAttDirs.add(dir)
+      desiredAtt.set(a.id, `${dir}/${sanitizeName(a.name) || 'file'}`)
+    }
+    const attSyncedMap = new Map(
+      db
+        .prepare('SELECT attachment_id, remote_path FROM attachment_sync WHERE user_id = ?')
+        .all(req.user.id)
+        .map((r) => [r.attachment_id, r.remote_path])
+    )
+    const upsertAtt = db.prepare(
+      `INSERT INTO attachment_sync (attachment_id, user_id, remote_path, synced_at) VALUES (?, ?, ?, ?)
+       ON CONFLICT(attachment_id) DO UPDATE SET remote_path = excluded.remote_path, synced_at = excluded.synced_at`
+    )
+    const dropAtt = db.prepare('DELETE FROM attachment_sync WHERE attachment_id = ?')
+
+    let attachments = 0
+    for (const a of attRows) {
+      const desired = desiredAtt.get(a.id)
+      if (attSyncedMap.get(a.id) === desired) continue // lampiran tidak berubah
+      if (!fs.existsSync(a.path)) continue
+      try {
+        await client.createDirectory(desired.slice(0, desired.lastIndexOf('/')), { recursive: true })
+        await client.putFileContents(desired, fs.readFileSync(a.path), {
+          overwrite: true,
+          contentLength: false,
+        })
+        upsertAtt.run(a.id, req.user.id, desired, new Date().toISOString())
+        attachments++
+      } catch (e) {
+        failed.push({ title: a.name, error: e.message })
+      }
+    }
+
+    // ---- lampiran yang sudah dihapus: hapus file remote-nya ----
+    const liveAtt = new Set(attRows.map((a) => a.id))
+    const staleAttDirs = new Set()
+    for (const [attId, remotePath] of attSyncedMap) {
+      if (liveAtt.has(attId)) continue
+      try {
+        await client.deleteFile(remotePath)
+        dropAtt.run(attId)
+        deleted++
+        staleAttDirs.add(remotePath.slice(0, remotePath.lastIndexOf('/')))
+      } catch (e) {
+        failed.push({ title: remotePath, error: e.message })
+      }
+    }
+
+    // ---- bersihkan folder lama yang kini kosong (hanya di bawah base) ----
+    const oldDirs = new Set(staleAttDirs)
+    for (const [, row] of syncedMap) {
+      if (!row.remote_path) continue
+      const d = row.remote_path.slice(0, row.remote_path.lastIndexOf('/'))
+      if (d && d !== base && !desiredDirs.has(d)) oldDirs.add(d)
+    }
+    for (const dir of oldDirs) {
+      try {
+        const items = await client.getDirectoryContents(dir)
+        if (Array.isArray(items) && items.length === 0) await client.deleteFile(dir)
+      } catch {
+        // abaikan kegagalan pembersihan folder
+      }
+    }
+
+    const changed = uploaded + moved + deleted + attachments
+    const parts = [`${uploaded} diunggah`]
+    if (moved) parts.push(`${moved} dipindah`)
+    if (deleted) parts.push(`${deleted} dihapus`)
+    if (attachments) parts.push(`${attachments} lampiran`)
     res.json({
       ok: true,
       uploaded,
+      moved,
+      deleted,
+      attachments,
       skipped,
       failed,
       path: base,
-      message: `Sinkron selesai: ${uploaded} file diunggah ke Nextcloud`,
+      message: changed ? `Sinkron selesai: ${parts.join(', ')}` : 'Semua catatan sudah sinkron',
     })
   } catch (e) {
     res.status(502).json({ error: `Sinkronisasi gagal: ${e.message}` })
@@ -829,7 +1002,11 @@ if (fs.existsSync(distPath)) {
 
 app.use((err, _req, res, _next) => {
   console.error(err)
-  res.status(500).json({ error: err.message })
+  if (err && err.code === 'LIMIT_FILE_SIZE') {
+    return res.status(413).json({ error: 'Ukuran file terlalu besar (maks 20 MB)' })
+  }
+  // Jangan bocorkan detail internal (path/stack/SQL) ke client.
+  res.status(500).json({ error: 'Terjadi kesalahan pada server' })
 })
 
 app.listen(PORT, () => {

@@ -1,3 +1,5 @@
+import DOMPurify from 'dompurify'
+
 export function timeAgo(iso) {
   const then = new Date(iso)
   const diff = Date.now() - then.getTime()
@@ -75,12 +77,24 @@ export const exportMarkdown = (note) => {
   URL.revokeObjectURL(url)
 }
 
+const escapeHtml = (s) =>
+  String(s).replace(
+    /[&<>"']/g,
+    (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]
+  )
+
 export const exportPdf = (note) => {
   const win = window.open('', '_blank')
   if (!win) return
-  const body = note.content
-    .replace(/```(\w+)?/g, (m, lang) => (lang ? `<pre><code class="language-${lang}">` : '<pre><code>'))
-  win.document.write(`<!doctype html><html><head><title>${note.title}</title>
+  const raw = note.content.replace(/```(\w+)?/g, (m, lang) =>
+    lang ? `<pre><code class="language-${escapeHtml(lang)}">` : '<pre><code>'
+  )
+  // Sanitasi sebelum ditulis ke dokumen baru (cegah DOM-injection/XSS dari isi catatan).
+  const body = DOMPurify.sanitize(raw, {
+    FORBID_TAGS: ['script', 'style', 'iframe', 'object', 'embed', 'form', 'link', 'meta'],
+    FORBID_ATTR: ['style'],
+  })
+  win.document.write(`<!doctype html><html><head><title>${escapeHtml(note.title)}</title>
 <style>
 body{font-family:Georgia,serif;line-height:1.7;max-width:720px;margin:40px auto;color:#111;padding:0 24px}
 h1,h2{font-family:sans-serif}
@@ -89,7 +103,7 @@ code{background:#f4f4f5;padding:2px 4px;border-radius:4px;font-size:.9em}
 pre code{background:none;padding:0}
 table{border-collapse:collapse;width:100%}th,td{border:1px solid #d4d4d8;padding:6px 10px;text-align:left}
 th{background:#f4f4f5}
-</style></head><body><h1>${note.title}</h1><hr>${body}</body></html>`)
+</style></head><body><h1>${escapeHtml(note.title)}</h1><hr>${body}</body></html>`)
   win.document.close()
   win.focus()
   win.print()

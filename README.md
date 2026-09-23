@@ -9,6 +9,7 @@ Aplikasi pencatatan teknis (dokumentasi konfigurasi server, SOP, troubleshooting
 - Folder, tag, pencarian cepat (FTS), sortir, dan pin.
 - Template catatan (Konfigurasi Server, Troubleshooting, SOP, Kredensial, Catatan Teks).
 - Lampiran file + **paste foto/gambar** langsung ke isi catatan.
+- **Kunci layar otomatis**: setelah 10 detik tanpa aktivitas, layar terkunci dan perlu PIN (yaitu `ADMIN_PASSWORD`) untuk membuka kembali. Durasi diatur lewat `VITE_LOCK_IDLE_SECONDS`.
 - Ekspor Markdown / PDF.
 - Halaman Pengaturan untuk sinkronisasi **Nextcloud via WebDAV** (password WebDAV disimpan terenkripsi AES-256-GCM).
 - Responsif (mobile) dan tema terang / gelap.
@@ -119,7 +120,9 @@ atau dengan **systemd** — pastikan service menjalankan `node server/index.js` 
 
 - Aplikasi untuk **satu pengguna**. Login hanya butuh **1 password** dari env `ADMIN_PASSWORD` (tanpa username, tanpa registrasi).
 - Jika `ADMIN_PASSWORD` tidak diset, memakai default `admin123` — **segera ganti di produksi**.
+- Saat `NODE_ENV=production`, server **menolak berjalan** bila `JWT_SECRET`/`ADMIN_PASSWORD` masih bernilai default. Set keduanya ke nilai acak kuat.
 - Wajib menyetel `JWT_SECRET` ke nilai acak kuat. Menjaga kunci ini di produksi.
+- Aplikasi mengirim security headers (CSP, `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer`) via `helmet`. Token lewat query string hanya diterima untuk endpoint lampiran (`/api/attachments/...`).
 - File `.env`, `server/devnotes.db*`, dan `server/uploads/` sudah di-`.gitignore`.
 
 > Contoh nilai `ADMIN_PASSWORD` untuk pengelolaan sendiri: cukup set satu password kuat saat deploy (misal. `ADMIN_PASSWORD=...` di `.env` / environment / Docker).
@@ -131,7 +134,7 @@ atau dengan **systemd** — pastikan service menjalankan `node server/index.js` 
 3. **Menu template** — dari sidebar tekan *Buat dari Template* untuk membuat catatan dari template terstruktur (server, troubleshooting, SOP, kredensial, catatan teks).
 4. **Editor** — mendukung Markdown; toolbar format, ekspor `.md` / PDF, dan paste gambar. Pilih mode *Edit / Split / Preview*.
 5. **Pencarian cepat** — `Ctrl + K` untuk command palette.
-6. **Sinkronisasi WebDAV** — buka *Pengaturan* (ikon gerigi di sidebar), isi server/username/password WebDAV Nextcloud, lalu tombol *Sinkron*. Catatan disimpan sebagai `.md` ke folder `<path>/[<Folder>/]<judul>.md`. File lampiran tidak disinkronkan.
+6. **Sinkronisasi WebDAV** — buka *Pengaturan* (ikon gerigi di sidebar), isi server/username/password WebDAV Nextcloud, lalu tombol *Sinkron*. Catatan disimpan sebagai `.md` ke folder `<path>/[<Folder>/]<judul>.md`. Sinkronisasi mencerminkan perubahan: isi catatan yang berubah di-upload ulang, ganti judul / pindah folder memindahkan file (`MOVE`), serta catatan yang dihapus (beserta lampirannya) ikut dihapus di Nextcloud. Lampiran diunggah ke `<path>/_attachments/<note-id>/`. Tag tidak ikut disinkronkan.
 
 ## Deploy dengan Docker
 

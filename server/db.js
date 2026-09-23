@@ -76,6 +76,14 @@ CREATE TABLE IF NOT EXISTS settings (
 CREATE TABLE IF NOT EXISTS note_sync (
   note_id TEXT PRIMARY KEY,
   user_id TEXT NOT NULL DEFAULT '',
+  remote_path TEXT,
+  synced_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS attachment_sync (
+  attachment_id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL DEFAULT '',
+  remote_path TEXT NOT NULL,
   synced_at TEXT NOT NULL
 );
 
@@ -130,6 +138,7 @@ ensureColumn('folders', 'user_id', "TEXT NOT NULL DEFAULT ''")
 ensureColumn('folders', 'icon', "TEXT NOT NULL DEFAULT ''")
 ensureColumn('tags', 'user_id', "TEXT NOT NULL DEFAULT ''")
 ensureColumn('notes', 'user_id', "TEXT NOT NULL DEFAULT ''")
+ensureColumn('note_sync', 'remote_path', 'TEXT')
 // tag name uniqueness must be per-user, not global -> rebuild tags table if it still
 // carries the old inline UNIQUE(name) constraint (its autoindex cannot be dropped)
 const hasOldTagIndex = db

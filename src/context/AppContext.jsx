@@ -7,6 +7,9 @@ const AppContext = createContext(null)
 
 const SESSION_IDLE_MINUTES = Number(import.meta.env.VITE_SESSION_IDLE_MINUTES || 15)
 const SESSION_WARN_SECONDS = 30
+// Kunci layar setelah sekian detik tanpa aktivitas (0 = nonaktif).
+const LOCK_IDLE_SECONDS = Number(import.meta.env.VITE_LOCK_IDLE_SECONDS ?? 10)
+const LOCK_ENABLED = LOCK_IDLE_SECONDS > 0
 
 export function AppProvider({ children }) {
   const [user, setUser] = useState(null)
@@ -61,6 +64,7 @@ export function AppProvider({ children }) {
 
   const [sessionExpiring, setSessionExpiring] = useState(false)
   const [sessionCountdown, setSessionCountdown] = useState(SESSION_WARN_SECONDS)
+  const [locked, setLocked] = useState(false)
   const markActiveRef = useRef(null)
 
   const toggleTheme = () => setTheme((t) => (t === 'dark' ? 'light' : 'dark'))
@@ -101,6 +105,7 @@ export function AppProvider({ children }) {
       localStorage.removeItem('devnotes-token')
       setToken(null)
       setUser(null)
+      setLocked(false)
     })
   }, [])
 
@@ -339,6 +344,7 @@ export function AppProvider({ children }) {
     localStorage.setItem('devnotes-token', res.token)
     setToken(res.token)
     setUser(res.user)
+    setLocked(false)
   }
 
   const register = async (username, password) => {
@@ -365,6 +371,7 @@ export function AppProvider({ children }) {
     setLoading(true)
     setSessionExpiring(false)
     setSessionCountdown(SESSION_WARN_SECONDS)
+    setLocked(false)
     setView('notes')
   }
 
@@ -375,6 +382,7 @@ export function AppProvider({ children }) {
       return undefined
     }
     const IDLE_MS = SESSION_IDLE_MINUTES * 60 * 1000
+    const LOCK_IDLE_MS = LOCK_IDLE_SECONDS * 1000
     let lastActivity = Date.now()
     let checkTimer = null
     let countdownTimer = null
@@ -413,6 +421,7 @@ export function AppProvider({ children }) {
     }
 
     const check = () => {
+      if (LOCK_ENABLED && Date.now() - lastActivity >= LOCK_IDLE_MS) setLocked(true)
       if (expiring) return
       if (Date.now() - lastActivity >= IDLE_MS) startCountdown()
     }
@@ -431,6 +440,16 @@ export function AppProvider({ children }) {
   }, [user])
 
   const continueSession = () => markActiveRef.current?.()
+
+  // Buka kunci layar: verifikasi PIN (= password admin) ke server.
+  const unlock = async (pin) => {
+    const res = await api.login(pin)
+    localStorage.setItem('devnotes-token', res.token)
+    setToken(res.token)
+    setLocked(false)
+    markActiveRef.current?.()
+    return res
+  }
 
   // ----- nextcloud / webdav -----
   const saveNextcloud = async (cfg) => {
@@ -526,6 +545,8 @@ export function AppProvider({ children }) {
     sessionExpiring,
     sessionCountdown,
     continueSession,
+    locked,
+    unlock,
     view,
     setView,
   }

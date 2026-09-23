@@ -115,8 +115,9 @@ export const I18N = {
     'settings.title': 'Pengaturan',
     'settings.subtitle': 'Sinkronisasi & integrasi',
     'settings.webdav': 'Sinkronisasi Nextcloud (WebDAV)',
-    'settings.webdavDesc': 'Semua catatan (.md) akan diunggah otomatis ke folder',
-    'settings.webdavDesc2': 'di server Nextcloud Anda saat tombol Sinkron ditekan.',
+    'settings.webdavDesc': 'Catatan (.md) disinkronkan ke folder',
+    'settings.webdavDesc2':
+      'saat tombol Sinkron ditekan. Perubahan isi, ganti judul, pindah folder, serta catatan/lampiran yang dihapus ikut diterapkan ke Nextcloud.',
     'settings.server': 'URL Server Nextcloud',
     'settings.serverHint': 'Cukup isi host (mis.',
     'settings.serverHint2': '). Path',
@@ -134,6 +135,10 @@ export const I18N = {
     'settings.syncing': 'Menyinkronkan...',
     'settings.noSync': 'Belum ada sinkronisasi. Simpan konfigurasi lalu tekan "Sinkron Sekarang" atau tombol Sinkron di pojok kiri bawah.',
     'settings.failed': '{n} file gagal',
+    'settings.moved': '{n} dipindah',
+    'settings.deleted': '{n} dihapus',
+    'settings.attachmentCount': '{n} lampiran',
+    'settings.uploadedCount': '{n} diunggah',
 
     // template modal
     'template.title': 'Buat catatan dari template',
@@ -191,6 +196,15 @@ export const I18N = {
     'session.desc': 'Tidak ada aktivitas terdeteksi. Logout otomatis dalam',
     'session.seconds': 'detik.',
     'session.continue': 'Lanjutkan Sesi',
+
+    // lock screen
+    'lock.title': 'Layar Terkunci',
+    'lock.desc': 'Tidak ada aktivitas. Masukkan PIN untuk membuka.',
+    'lock.pin': 'PIN',
+    'lock.pinPlaceholder': 'Masukkan PIN',
+    'lock.unlock': 'Buka',
+    'lock.wrongPin': 'PIN salah',
+    'lock.logout': 'Keluar',
   },
 
   en: {
@@ -300,8 +314,9 @@ export const I18N = {
     'settings.title': 'Settings',
     'settings.subtitle': 'Sync & integrations',
     'settings.webdav': 'Nextcloud sync (WebDAV)',
-    'settings.webdavDesc': 'All notes (.md) are uploaded to the folder',
-    'settings.webdavDesc2': 'on your Nextcloud server when the Sync button is pressed.',
+    'settings.webdavDesc': 'Notes (.md) are synced to the folder',
+    'settings.webdavDesc2':
+      'when the Sync button is pressed. Content changes, renames, folder moves, and deleted notes/attachments are applied to Nextcloud too.',
     'settings.server': 'Nextcloud server URL',
     'settings.serverHint': 'Just enter the host (e.g.',
     'settings.serverHint2': '). The path',
@@ -319,6 +334,10 @@ export const I18N = {
     'settings.syncing': 'Syncing...',
     'settings.noSync': 'No sync yet. Save the configuration then press "Sync Now" or the Sync button in the bottom-left corner.',
     'settings.failed': '{n} files failed',
+    'settings.moved': '{n} moved',
+    'settings.deleted': '{n} deleted',
+    'settings.attachmentCount': '{n} attachments',
+    'settings.uploadedCount': '{n} uploaded',
 
     'template.title': 'Create a note from template',
     'template.importing': 'Importing...',
@@ -370,6 +389,15 @@ export const I18N = {
     'session.desc': 'No activity detected. Auto logout in',
     'session.seconds': 'seconds.',
     'session.continue': 'Continue Session',
+
+    // lock screen
+    'lock.title': 'Screen Locked',
+    'lock.desc': 'No activity. Enter your PIN to unlock.',
+    'lock.pin': 'PIN',
+    'lock.pinPlaceholder': 'Enter PIN',
+    'lock.unlock': 'Unlock',
+    'lock.wrongPin': 'Wrong PIN',
+    'lock.logout': 'Sign out',
   },
 }
 
