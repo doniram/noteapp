@@ -9,7 +9,7 @@ Aplikasi pencatatan teknis (dokumentasi konfigurasi server, SOP, troubleshooting
 - Folder, tag, pencarian cepat (FTS), sortir, dan pin.
 - Template catatan (Konfigurasi Server, Troubleshooting, SOP, Kredensial, Catatan Teks).
 - Lampiran file + **paste foto/gambar** langsung ke isi catatan.
-- **Kunci layar otomatis**: setelah 10 detik tanpa aktivitas, layar terkunci dan perlu PIN (yaitu `ADMIN_PASSWORD`) untuk membuka kembali. Durasi diatur lewat `VITE_LOCK_IDLE_SECONDS`.
+- **Kunci layar otomatis**: setelah 60 detik tanpa aktivitas, layar terkunci dan perlu PIN (yaitu `ADMIN_PASSWORD`) untuk membuka kembali. Durasi diatur lewat `VITE_LOCK_IDLE_SECONDS`.
 - Ekspor Markdown / PDF.
 - Halaman Pengaturan untuk sinkronisasi **Nextcloud via WebDAV** (password WebDAV disimpan terenkripsi AES-256-GCM).
 - Responsif (mobile) dan tema terang / gelap.

@@ -8,7 +8,7 @@ const AppContext = createContext(null)
 const SESSION_IDLE_MINUTES = Number(import.meta.env.VITE_SESSION_IDLE_MINUTES || 15)
 const SESSION_WARN_SECONDS = 30
 // Kunci layar setelah sekian detik tanpa aktivitas (0 = nonaktif).
-const LOCK_IDLE_SECONDS = Number(import.meta.env.VITE_LOCK_IDLE_SECONDS ?? 10)
+const LOCK_IDLE_SECONDS = Number(import.meta.env.VITE_LOCK_IDLE_SECONDS ?? 60)
 const LOCK_ENABLED = LOCK_IDLE_SECONDS > 0
 
 export function AppProvider({ children }) {
@@ -124,7 +124,11 @@ export function AppProvider({ children }) {
   useEffect(() => {
     notesRef.current = notes
   }, [notes])
+  // Penanda catatan yang punya editan lokal belum tersimpan, dipakai agar
+  // refetch daftar dari server tidak menimpa isi yang masih diketik.
   const pendingSave = useRef({})
+  const savingIds = useRef(new Set())
+  const noteRev = useRef({})
 
   // ----- base data -----
   useEffect(() => {
@@ -164,7 +168,11 @@ export function AppProvider({ children }) {
           setResults(list)
           setNotes((prev) => {
             const map = new Map(prev.map((n) => [n.id, n]))
-            for (const n of list) map.set(n.id, n)
+            for (const n of list) {
+              // Jangan timpa catatan yang masih punya editan lokal belum tersimpan.
+              if (savingIds.current.has(n.id)) continue
+              map.set(n.id, n)
+            }
             return [...map.values()]
           })
         }
@@ -186,21 +194,40 @@ export function AppProvider({ children }) {
   }, [activeId, notes, results])
 
   // ----- CRUD -----
+  // Terapkan patch ke catatan di daftar & hasil pencarian sekaligus.
+  const patchNoteLocal = (id, patch) => {
+    const apply = (list) => list.map((n) => (n.id === id ? { ...n, ...patch } : n))
+    setNotes(apply)
+    setResults(apply)
+  }
+
   const updateNote = (id, patch) => {
-    const now = new Date().toISOString()
-    setNotes((prev) => prev.map((n) => (n.id === id ? { ...n, ...patch, updatedAt: now } : n)))
-    setResults((prev) => prev.map((n) => (n.id === id ? { ...n, ...patch, updatedAt: now } : n)))
+    patchNoteLocal(id, { ...patch, updatedAt: new Date().toISOString() })
+    // Tandai revisi: respons autosave hanya boleh menimpa state bila tidak ada
+    // editan lokal yang lebih baru, supaya kursor tidak lompat ke akhir teks.
+    noteRev.current[id] = (noteRev.current[id] || 0) + 1
+    const rev = noteRev.current[id]
+    savingIds.current.add(id)
 
     clearTimeout(pendingSave.current[id])
     pendingSave.current[id] = setTimeout(async () => {
       const full = notesRef.current.find((n) => n.id === id)
-      if (!full) return
+      if (!full) {
+        savingIds.current.delete(id)
+        return
+      }
       try {
         const saved = await api.updateNote(id, full)
-        setNotes((prev) => prev.map((n) => (n.id === id ? saved : n)))
-        setResults((prev) => prev.map((n) => (n.id === id ? saved : n)))
+        if (noteRev.current[id] !== rev) return // ada editan lebih baru; biarkan save berikutnya
+        patchNoteLocal(id, saved)
+        savingIds.current.delete(id)
+        delete pendingSave.current[id]
       } catch (e) {
-        setError(e.message)
+        if (noteRev.current[id] === rev) {
+          setError(e.message)
+          savingIds.current.delete(id)
+          delete pendingSave.current[id]
+        }
       }
     }, 700)
   }
@@ -223,10 +250,12 @@ export function AppProvider({ children }) {
     setNotes((prev) => [temp, ...prev])
     setResults((prev) => [temp, ...prev])
     setActiveId(temp.id)
+    noteRev.current[temp.id] = 0
     try {
       const saved = await api.createNote(temp)
-      setNotes((prev) => prev.map((n) => (n.id === temp.id ? saved : n)))
-      setResults((prev) => prev.map((n) => (n.id === temp.id ? saved : n)))
+      // Kalau pengguna sudah mulai mengetik sebelum request selesai, jangan
+      // timpa isinya dengan respons create (nanti diselamatkan oleh autosave).
+      if (noteRev.current[temp.id] === 0) patchNoteLocal(temp.id, saved)
       return saved
     } catch (e) {
       setError(e.message)
@@ -251,6 +280,10 @@ export function AppProvider({ children }) {
   }
 
   const deleteNote = async (id) => {
+    clearTimeout(pendingSave.current[id])
+    delete pendingSave.current[id]
+    delete noteRev.current[id]
+    savingIds.current.delete(id)
     setNotes((prev) => prev.filter((n) => n.id !== id))
     setResults((prev) => prev.filter((n) => n.id !== id))
     if (activeId === id) setActiveId(null)
@@ -319,8 +352,9 @@ export function AppProvider({ children }) {
     try {
       const att = await api.uploadAttachment(noteId, file)
       const updated = await api.getNote(noteId)
-      setNotes((prev) => prev.map((n) => (n.id === noteId ? updated : n)))
-      setResults((prev) => prev.map((n) => (n.id === noteId ? updated : n)))
+      // Hanya perbarui lampiran; jangan ganti seluruh note agar editan teks
+      // yang belum tersimpan tidak tertimpa (kursor tetap di tempat).
+      patchNoteLocal(noteId, { attachments: updated.attachments })
       return att
     } catch (e) {
       setError(e.message)
@@ -331,8 +365,7 @@ export function AppProvider({ children }) {
     try {
       await api.deleteAttachment(attId)
       const updated = await api.getNote(noteId)
-      setNotes((prev) => prev.map((n) => (n.id === noteId ? updated : n)))
-      setResults((prev) => prev.map((n) => (n.id === noteId ? updated : n)))
+      patchNoteLocal(noteId, { attachments: updated.attachments })
     } catch (e) {
       setError(e.message)
     }
@@ -355,6 +388,10 @@ export function AppProvider({ children }) {
   }
 
   const logout = () => {
+    for (const t of Object.values(pendingSave.current)) clearTimeout(t)
+    pendingSave.current = {}
+    savingIds.current.clear()
+    noteRev.current = {}
     localStorage.removeItem('devnotes-token')
     setToken(null)
     setUser(null)

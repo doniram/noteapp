@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { StickyNote, LogIn, Loader2, Eye, EyeOff, KeyRound } from 'lucide-react'
+import { StickyNote, LogIn, Loader2, Eye, EyeOff } from 'lucide-react'
 import { useApp } from '../context/useApp'
 
 export default function Login() {
