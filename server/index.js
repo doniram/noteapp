@@ -8,6 +8,12 @@ import path from 'node:path'
 import fs from 'node:fs'
 import crypto from 'node:crypto'
 import { createClient } from 'webdav'
+import {
+  buildAuthUrl,
+  exchangeCode,
+  getDriveAccount,
+  createDriveAdapter,
+} from './gdrive.js'
 import { fileURLToPath } from 'node:url'
 import { db, seedAdmin, seedIfEmpty, rowToNote, buildSnippet, ftsMatch } from './db.js'
 
@@ -260,6 +266,7 @@ function getStoredWebdav(userId) {
   const row = db.prepare('SELECT * FROM settings WHERE user_id = ?').get(userId)
   if (!row) return null
   return {
+    enabled: row.webdav_enabled === 1,
     server: row.webdav_server,
     username: row.webdav_username,
     password: decryptSecret(row.webdav_password),
@@ -270,12 +277,57 @@ function getStoredWebdav(userId) {
 function getStoredWebdavPublic(userId) {
   const row = db.prepare('SELECT * FROM settings WHERE user_id = ?').get(userId)
   return {
+    enabled: row?.webdav_enabled === 1,
     server: row?.webdav_server || '',
     username: row?.webdav_username || '',
     path: row?.webdav_path || 'DevNotes',
     hasPassword: !!row?.webdav_password,
   }
 }
+
+function getStoredGdrive(userId) {
+  const row = db.prepare('SELECT * FROM settings WHERE user_id = ?').get(userId)
+  if (!row) return null
+  return {
+    enabled: row.gdrive_enabled === 1,
+    clientId: row.gdrive_client_id || '',
+    clientSecret: decryptSecret(row.gdrive_client_secret),
+    refreshToken: decryptSecret(row.gdrive_refresh_token),
+    folder: row.gdrive_folder || 'DevNotes',
+    account: row.gdrive_account || '',
+  }
+}
+
+function getStoredGdrivePublic(userId) {
+  const row = db.prepare('SELECT * FROM settings WHERE user_id = ?').get(userId)
+  return {
+    enabled: row?.gdrive_enabled === 1,
+    clientId: row?.gdrive_client_id || '',
+    folder: row?.gdrive_folder || 'DevNotes',
+    account: row?.gdrive_account || '',
+    hasClientSecret: !!row?.gdrive_client_secret,
+    connected: !!row?.gdrive_refresh_token,
+  }
+}
+
+function ensureSettingsRow(userId) {
+  const row = db.prepare('SELECT user_id FROM settings WHERE user_id = ?').get(userId)
+  if (!row) {
+    db.prepare('INSERT INTO settings (user_id, updated_at) VALUES (?, ?)').run(
+      userId,
+      new Date().toISOString()
+    )
+  }
+}
+
+// URL publik aplikasi, dipakai untuk redirect URI OAuth Google.
+function publicBaseUrl(req) {
+  const configured = (process.env.APP_BASE_URL || '').trim().replace(/\/+$/, '')
+  if (configured) return configured
+  return `${req.protocol}://${req.get('host')}`
+}
+
+const gdriveRedirectUri = (req) => `${publicBaseUrl(req)}/api/gdrive/oauth/callback`
 
 const davRoot = (cfg) => {
   let base = cfg.server.replace(/\/+$/, '')
@@ -307,6 +359,49 @@ function webdavConfigFrom(body, fallback = {}) {
   }
 }
 
+// Adapter WebDAV dengan antarmuka path relatif terhadap folder tujuan, sama
+// seperti adapter Google Drive, supaya mesin rekonsiliasi bisa dipakai bersama.
+function makeWebdavAdapter(cfg) {
+  const client = makeWebdavClient(cfg)
+  const base = `/${String(cfg.path || 'DevNotes').replace(/^\/+|\/+$/g, '') || 'DevNotes'}`
+  const full = (rel) => (rel ? `${base}/${rel}` : base)
+  return {
+    type: 'webdav',
+    async ensureDir(rel) {
+      await client.createDirectory(full(rel), { recursive: true })
+    },
+    // Data lama menyimpan path absolut (<base>/...) -> jadikan relatif.
+    toRelative(p) {
+      if (!p) return p
+      if (p === base) return ''
+      const prefix = `${base}/`
+      return p.startsWith(prefix) ? p.slice(prefix.length) : p.replace(/^\/+/, '')
+    },
+    async putFile(rel, data) {
+      await client.putFileContents(full(rel), data, { overwrite: true, contentLength: false })
+      return {}
+    },
+    async moveFile(fromRel, toRel) {
+      await client.moveFile(full(fromRel), full(toRel), { overwrite: true })
+      return {}
+    },
+    async deleteFile(rel) {
+      await client.deleteFile(full(rel))
+    },
+    async deleteDir(rel) {
+      if (rel) await client.deleteFile(full(rel))
+    },
+    async dirIsEmpty(rel) {
+      const items = await client.getDirectoryContents(full(rel))
+      return Array.isArray(items) && items.length === 0
+    },
+    async test() {
+      await client.getDirectoryContents('/')
+      return ''
+    },
+  }
+}
+
 // ---------- health ----------
 app.get('/api/health', (_req, res) => res.json({ ok: true, time: new Date().toISOString() }))
 
@@ -332,7 +427,13 @@ app.get('/api/auth/me', requireAuth, (req, res) => {
 
 // protect every other /api route
 app.use('/api', (req, res, next) => {
-  if (req.path === '/health' || req.path.startsWith('/auth/')) return next()
+  if (
+    req.path === '/health' ||
+    req.path.startsWith('/auth/') ||
+    req.path.startsWith('/gdrive/oauth/callback')
+  ) {
+    return next()
+  }
   return requireAuth(req, res, next)
 })
 
@@ -751,26 +852,305 @@ app.get('/api/settings/nextcloud', (req, res) => {
 })
 
 app.put('/api/settings/nextcloud', (req, res) => {
-  const cfg = webdavConfigFrom(req.body ?? {}, getStoredWebdav(req.user.id) ?? {})
-  if (!cfg.server || !cfg.username) {
+  ensureSettingsRow(req.user.id)
+  const stored = getStoredWebdav(req.user.id) ?? {}
+  const cfg = webdavConfigFrom(req.body ?? {}, stored)
+  const enabled = req.body?.enabled !== undefined ? !!req.body.enabled : !!stored.enabled
+  if (enabled && (!cfg.server || !cfg.username)) {
     return res.status(400).json({ error: 'Server dan username wajib diisi' })
   }
-  const stored = getStoredWebdav(req.user.id)
-  const password = cfg.password || stored?.password || ''
+  const password = cfg.password || stored.password || ''
   db.prepare(
-    `INSERT INTO settings (user_id, webdav_server, webdav_username, webdav_password, webdav_path, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?)
-     ON CONFLICT(user_id) DO UPDATE SET
-       webdav_server = excluded.webdav_server,
-       webdav_username = excluded.webdav_username,
-       webdav_password = excluded.webdav_password,
-       webdav_path = excluded.webdav_path,
-       updated_at = excluded.updated_at`
-  ).run(req.user.id, cfg.server, cfg.username, encryptSecret(password), cfg.path, new Date().toISOString())
+    `UPDATE settings SET webdav_server = ?, webdav_username = ?, webdav_password = ?,
+       webdav_path = ?, webdav_enabled = ?, updated_at = ? WHERE user_id = ?`
+  ).run(
+    cfg.server,
+    cfg.username,
+    password ? encryptSecret(password) : '',
+    cfg.path,
+    enabled ? 1 : 0,
+    new Date().toISOString(),
+    req.user.id
+  )
   res.json(getStoredWebdavPublic(req.user.id))
 })
 
-// ---------- nextcloud test & sync ----------
+app.get('/api/settings/gdrive', (req, res) => {
+  res.json(getStoredGdrivePublic(req.user.id))
+})
+
+app.put('/api/settings/gdrive', (req, res) => {
+  ensureSettingsRow(req.user.id)
+  const stored = getStoredGdrive(req.user.id) ?? {}
+  const clientId = String(req.body?.clientId ?? stored.clientId ?? '').trim()
+  const clientSecret = String(req.body?.clientSecret ?? '').trim() || stored.clientSecret || ''
+  const folder =
+    String(req.body?.folder ?? stored.folder ?? 'DevNotes')
+      .trim()
+      .replace(/^\/+|\/+$/g, '') || 'DevNotes'
+  const enabled = req.body?.enabled !== undefined ? !!req.body.enabled : !!stored.enabled
+  if (enabled && (!clientId || !clientSecret)) {
+    return res.status(400).json({ error: 'Client ID dan Client Secret wajib diisi' })
+  }
+  db.prepare(
+    `UPDATE settings SET gdrive_client_id = ?, gdrive_client_secret = ?, gdrive_folder = ?,
+       gdrive_enabled = ?, updated_at = ? WHERE user_id = ?`
+  ).run(
+    clientId,
+    clientSecret ? encryptSecret(clientSecret) : '',
+    folder,
+    enabled ? 1 : 0,
+    new Date().toISOString(),
+    req.user.id
+  )
+  res.json(getStoredGdrivePublic(req.user.id))
+})
+
+// ---------- sync engine (Nextcloud/WebDAV + Google Drive) ----------
+const providerLabel = (p) => (p === 'webdav' ? 'Nextcloud' : 'Google Drive')
+
+// Mesin rekonsiliasi generik. Adapter mengekspos operasi berbasis path relatif
+// terhadap folder tujuan, sehingga logika sama untuk semua provider.
+async function reconcileSync({ userId, provider, adapter }) {
+  await adapter.ensureDir('')
+
+  const notes = queryNotes({
+    userId,
+    search: '',
+    folder: '',
+    tag: '',
+    sort: 'title',
+    limit: null,
+  })
+  const folderNames = new Map(
+    db
+      .prepare('SELECT id, name FROM folders WHERE user_id = ?')
+      .all(userId)
+      .map((f) => [f.id, f.name])
+  )
+
+  // Path relatif tiap catatan: [<Folder>/]<judul>.md (deterministik + anti-bentrok).
+  const desiredByNote = new Map()
+  const desiredDirs = new Set([''])
+  const used = new Map()
+  for (const note of notes) {
+    const folderName = note.folderId ? sanitizeName(folderNames.get(note.folderId) || '') : ''
+    desiredDirs.add(folderName)
+    let name = (sanitizeName(note.title) || 'catatan').slice(0, 80)
+    const key = `${folderName.toLowerCase()}\u0000${name.toLowerCase()}`
+    if (used.has(key)) {
+      const n = used.get(key) + 1
+      used.set(key, n)
+      name = `${name} (${n})`
+    } else {
+      used.set(key, 0)
+    }
+    desiredByNote.set(note.id, folderName ? `${folderName}/${name}.md` : `${name}.md`)
+  }
+
+  const loadState = db.prepare(
+    'SELECT item_id, remote_path, remote_id, synced_at FROM sync_files WHERE item_type = ? AND provider = ?'
+  )
+  const normalize = (p) => (adapter.toRelative ? adapter.toRelative(p) : p)
+  const syncedNotes = new Map(
+    loadState.all('note', provider).map((r) => [r.item_id, { ...r, remote_path: normalize(r.remote_path) }])
+  )
+  const syncedAtts = new Map(
+    loadState
+      .all('attachment', provider)
+      .map((r) => [r.item_id, { ...r, remote_path: normalize(r.remote_path) }])
+  )
+
+  const upsertSync = db.prepare(
+    `INSERT INTO sync_files (item_type, item_id, provider, remote_path, remote_id, synced_at)
+     VALUES (?, ?, ?, ?, ?, ?)
+     ON CONFLICT(item_type, item_id, provider) DO UPDATE SET
+       remote_path = excluded.remote_path,
+       remote_id = excluded.remote_id,
+       synced_at = excluded.synced_at`
+  )
+  const dropSync = db.prepare(
+    'DELETE FROM sync_files WHERE item_type = ? AND item_id = ? AND provider = ?'
+  )
+
+  const dirOf = (p) => (p && p.includes('/') ? p.slice(0, p.lastIndexOf('/')) : '')
+  let uploaded = 0
+  let moved = 0
+  let skipped = 0
+  let deleted = 0
+  let attachments = 0
+  const failed = []
+
+  // ---- catatan: unggah isi baru, pindahkan saat judul/folder berubah ----
+  for (const note of notes) {
+    const desired = desiredByNote.get(note.id)
+    if (!desired) continue
+    const prev = syncedNotes.get(note.id)
+    const samePlace = prev?.remote_path === desired
+    if (samePlace && prev.synced_at >= note.updatedAt) {
+      skipped++
+      continue
+    }
+    try {
+      await adapter.ensureDir(dirOf(desired))
+      let didMove = false
+      if (prev?.remote_path && !samePlace) {
+        try {
+          await adapter.moveFile(prev.remote_path, desired, prev.remote_id)
+          didMove = true
+        } catch {
+          // file lama tidak ada -> cukup unggah ulang di bawah
+        }
+      }
+      const res = await adapter.putFile(desired, note.content, 'text/markdown')
+      upsertSync.run(
+        'note',
+        note.id,
+        provider,
+        desired,
+        res?.id ?? prev?.remote_id ?? null,
+        note.updatedAt
+      )
+      if (didMove) moved++
+      else uploaded++
+    } catch (e) {
+      failed.push({ title: note.title, error: e.message })
+    }
+  }
+
+  // ---- catatan yang sudah dihapus: hapus file remote-nya ----
+  const liveIds = new Set(notes.map((n) => n.id))
+  for (const [noteId, row] of syncedNotes) {
+    if (liveIds.has(noteId)) continue
+    try {
+      if (row.remote_path) await adapter.deleteFile(row.remote_path, row.remote_id)
+      dropSync.run('note', noteId, provider)
+      deleted++
+    } catch (e) {
+      failed.push({ title: row.remote_path || noteId, error: e.message })
+    }
+  }
+
+  // ---- lampiran: unggah ke _attachments/<note-id>/<nama-file> ----
+  const attRows = db
+    .prepare('SELECT a.* FROM attachments a JOIN notes n ON n.id = a.note_id WHERE n.user_id = ?')
+    .all(userId)
+  const desiredAtt = new Map()
+  for (const a of attRows) {
+    desiredAtt.set(a.id, `_attachments/${a.note_id}/${sanitizeName(a.name) || 'file'}`)
+  }
+
+  for (const a of attRows) {
+    const desired = desiredAtt.get(a.id)
+    if (syncedAtts.get(a.id)?.remote_path === desired) continue // lampiran tidak berubah
+    if (!fs.existsSync(a.path)) continue
+    try {
+      await adapter.ensureDir(dirOf(desired))
+      const res = await adapter.putFile(desired, fs.readFileSync(a.path))
+      upsertSync.run('attachment', a.id, provider, desired, res?.id ?? null, new Date().toISOString())
+      attachments++
+    } catch (e) {
+      failed.push({ title: a.name, error: e.message })
+    }
+  }
+
+  // ---- lampiran yang sudah dihapus ----
+  const liveAtt = new Set(attRows.map((a) => a.id))
+  const staleAttDirs = new Set()
+  for (const [attId, row] of syncedAtts) {
+    if (liveAtt.has(attId)) continue
+    try {
+      await adapter.deleteFile(row.remote_path, row.remote_id)
+      dropSync.run('attachment', attId, provider)
+      deleted++
+      staleAttDirs.add(dirOf(row.remote_path))
+    } catch (e) {
+      failed.push({ title: row.remote_path, error: e.message })
+    }
+  }
+
+  // ---- bersihkan folder lama yang kini kosong ----
+  const oldDirs = new Set()
+  for (const d of staleAttDirs) if (d) oldDirs.add(d)
+  for (const [, row] of syncedNotes) {
+    const d = dirOf(row.remote_path)
+    if (d && !desiredDirs.has(d)) oldDirs.add(d)
+  }
+  for (const dir of oldDirs) {
+    try {
+      if (await adapter.dirIsEmpty(dir)) await adapter.deleteDir(dir)
+    } catch {
+      // abaikan kegagalan pembersihan folder
+    }
+  }
+
+  const changed = uploaded + moved + deleted + attachments
+  const parts = [`${uploaded} diunggah`]
+  if (moved) parts.push(`${moved} dipindah`)
+  if (deleted) parts.push(`${deleted} dihapus`)
+  if (attachments) parts.push(`${attachments} lampiran`)
+  return {
+    ok: true,
+    provider,
+    uploaded,
+    moved,
+    deleted,
+    attachments,
+    skipped,
+    failed,
+    message: changed ? `Sinkron selesai: ${parts.join(', ')}` : 'Semua catatan sudah sinkron',
+  }
+}
+
+// Kembalikan adapter provider bila aktif & terkonfigurasi.
+function adapterFor(userId, provider) {
+  if (provider === 'webdav') {
+    const stored = getStoredWebdav(userId)
+    if (!stored?.enabled) return { disabled: true }
+    if (!stored.server || !stored.username || !stored.password) {
+      return { error: 'Konfigurasi WebDAV belum lengkap. Buka halaman Pengaturan.' }
+    }
+    return { adapter: makeWebdavAdapter(stored) }
+  }
+  if (provider === 'gdrive') {
+    const stored = getStoredGdrive(userId)
+    if (!stored?.enabled) return { disabled: true }
+    if (!stored.clientId || !stored.clientSecret || !stored.refreshToken) {
+      return { error: 'Google Drive belum terhubung. Buka halaman Pengaturan.' }
+    }
+    return {
+      adapter: createDriveAdapter({
+        clientId: stored.clientId,
+        clientSecret: stored.clientSecret,
+        refreshToken: stored.refreshToken,
+        root: stored.folder,
+      }),
+    }
+  }
+  return { error: `Provider tidak dikenal: ${provider}` }
+}
+
+async function runProviderSync(userId, provider) {
+  const { adapter, error, disabled } = adapterFor(userId, provider)
+  if (disabled) {
+    return {
+      ok: false,
+      provider,
+      disabled: true,
+      error: `Sinkronisasi ${providerLabel(provider)} dinonaktifkan.`,
+    }
+  }
+  if (error) return { ok: false, provider, error }
+  try {
+    return await reconcileSync({ userId, provider, adapter })
+  } catch (e) {
+    return { ok: false, provider, error: `Sinkronisasi gagal: ${e.message}` }
+  }
+}
+
+const SYNC_PROVIDERS = ['webdav', 'gdrive']
+
+// ---------- nextcloud (webdav) test & sync ----------
 app.post('/api/nextcloud/test', async (req, res) => {
   const stored = getStoredWebdav(req.user.id) ?? {}
   const cfg = webdavConfigFrom(req.body ?? {}, stored)
@@ -780,8 +1160,7 @@ app.post('/api/nextcloud/test', async (req, res) => {
   const password = cfg.password || stored.password || ''
   if (!password) return res.status(400).json({ error: 'Password wajib diisi' })
   try {
-    const client = makeWebdavClient({ ...cfg, password })
-    await client.getDirectoryContents('/')
+    await makeWebdavAdapter({ ...cfg, password }).test()
     res.json({ ok: true, message: 'Koneksi WebDAV berhasil' })
   } catch (e) {
     res.status(502).json({ error: `Koneksi gagal: ${e.message}` })
@@ -789,205 +1168,136 @@ app.post('/api/nextcloud/test', async (req, res) => {
 })
 
 app.post('/api/nextcloud/sync', async (req, res) => {
-  const stored = getStoredWebdav(req.user.id)
-  if (!stored || !stored.server || !stored.username || !stored.password) {
-    return res.status(400).json({ error: 'Konfigurasi WebDAV belum diatur. Buka halaman Pengaturan.' })
+  const result = await runProviderSync(req.user.id, 'webdav')
+  if (!result.ok) return res.status(result.disabled ? 400 : 502).json(result)
+  res.json(result)
+})
+
+// ---------- google drive test, oauth & sync ----------
+app.post('/api/gdrive/test', async (req, res) => {
+  const stored = getStoredGdrive(req.user.id) ?? {}
+  const clientId = String(req.body?.clientId ?? stored.clientId ?? '').trim()
+  const clientSecret = String(req.body?.clientSecret ?? '').trim() || stored.clientSecret || ''
+  if (!clientId || !clientSecret) {
+    return res.status(400).json({ error: 'Client ID dan Client Secret wajib diisi' })
+  }
+  if (!stored.refreshToken) {
+    return res.status(400).json({ error: 'Belum terhubung ke Google. Klik "Hubungkan ke Google".' })
   }
   try {
-    const client = makeWebdavClient(stored)
-    const base = `/${stored.path}`
-    await client.createDirectory(base, { recursive: true })
-
-    const notes = queryNotes({
-      userId: req.user.id,
-      search: '',
-      folder: '',
-      tag: '',
-      sort: 'title',
-      limit: null,
+    const account = await getDriveAccount({
+      clientId,
+      clientSecret,
+      refreshToken: stored.refreshToken,
     })
-    const folderNames = new Map(
-      db
-        .prepare('SELECT id, name FROM folders WHERE user_id = ?')
-        .all(req.user.id)
-        .map((f) => [f.id, f.name])
-    )
-
-    // Path tujuan tiap catatan: <base>/[<Folder>/]<judul>.md (deterministik + anti-bentrok).
-    const desiredByNote = new Map()
-    const desiredDirs = new Set([base])
-    const used = new Map()
-    for (const note of notes) {
-      const folderName = note.folderId ? sanitizeName(folderNames.get(note.folderId) || '') : ''
-      const dir = folderName ? `${base}/${folderName}` : base
-      desiredDirs.add(dir)
-      let name = (sanitizeName(note.title) || 'catatan').slice(0, 80)
-      const key = `${dir.toLowerCase()}\u0000${name.toLowerCase()}`
-      if (used.has(key)) {
-        const n = used.get(key) + 1
-        used.set(key, n)
-        name = `${name} (${n})`
-      } else {
-        used.set(key, 0)
-      }
-      desiredByNote.set(note.id, `${dir}/${name}.md`)
-    }
-
-    const syncedMap = new Map(
-      db
-        .prepare('SELECT note_id, remote_path, synced_at FROM note_sync WHERE user_id = ?')
-        .all(req.user.id)
-        .map((r) => [r.note_id, r])
-    )
-    const upsertSync = db.prepare(
-      `INSERT INTO note_sync (note_id, user_id, remote_path, synced_at) VALUES (?, ?, ?, ?)
-       ON CONFLICT(note_id) DO UPDATE SET remote_path = excluded.remote_path, synced_at = excluded.synced_at`
-    )
-    const dropSync = db.prepare('DELETE FROM note_sync WHERE note_id = ?')
-
-    let uploaded = 0
-    let moved = 0
-    let skipped = 0
-    let deleted = 0
-    const failed = []
-
-    // ---- catatan: unggah isi baru, pindahkan saat judul/folder berubah ----
-    for (const note of notes) {
-      const desired = desiredByNote.get(note.id)
-      if (!desired) continue
-      const dir = desired.slice(0, desired.lastIndexOf('/'))
-      const prev = syncedMap.get(note.id)
-      const samePlace = prev?.remote_path === desired
-      if (samePlace && prev.synced_at >= note.updatedAt) {
-        skipped++
-        continue
-      }
-      try {
-        await client.createDirectory(dir, { recursive: true })
-        let didMove = false
-        if (prev?.remote_path && !samePlace) {
-          try {
-            await client.moveFile(prev.remote_path, desired, { overwrite: true })
-            didMove = true
-          } catch {
-            // file lama tidak ada di remote -> cukup unggah ulang di bawah
-          }
-        }
-        await client.putFileContents(desired, note.content, { overwrite: true, contentLength: false })
-        upsertSync.run(note.id, req.user.id, desired, note.updatedAt)
-        if (didMove) moved++
-        else uploaded++
-      } catch (e) {
-        failed.push({ title: note.title, error: e.message })
-      }
-    }
-
-    // ---- catatan yang sudah dihapus: hapus file remote-nya ----
-    const liveIds = new Set(notes.map((n) => n.id))
-    for (const [noteId, row] of syncedMap) {
-      if (liveIds.has(noteId)) continue
-      try {
-        if (row.remote_path) await client.deleteFile(row.remote_path)
-        dropSync.run(noteId)
-        deleted++
-      } catch (e) {
-        failed.push({ title: row.remote_path || noteId, error: e.message })
-      }
-    }
-
-    // ---- lampiran: unggah ke <base>/_attachments/<note-id>/<nama-file> ----
-    const attRows = db
-      .prepare(
-        `SELECT a.* FROM attachments a JOIN notes n ON n.id = a.note_id WHERE n.user_id = ?`
-      )
-      .all(req.user.id)
-    const desiredAtt = new Map()
-    const desiredAttDirs = new Set()
-    for (const a of attRows) {
-      const dir = `${base}/_attachments/${a.note_id}`
-      desiredAttDirs.add(dir)
-      desiredAtt.set(a.id, `${dir}/${sanitizeName(a.name) || 'file'}`)
-    }
-    const attSyncedMap = new Map(
-      db
-        .prepare('SELECT attachment_id, remote_path FROM attachment_sync WHERE user_id = ?')
-        .all(req.user.id)
-        .map((r) => [r.attachment_id, r.remote_path])
-    )
-    const upsertAtt = db.prepare(
-      `INSERT INTO attachment_sync (attachment_id, user_id, remote_path, synced_at) VALUES (?, ?, ?, ?)
-       ON CONFLICT(attachment_id) DO UPDATE SET remote_path = excluded.remote_path, synced_at = excluded.synced_at`
-    )
-    const dropAtt = db.prepare('DELETE FROM attachment_sync WHERE attachment_id = ?')
-
-    let attachments = 0
-    for (const a of attRows) {
-      const desired = desiredAtt.get(a.id)
-      if (attSyncedMap.get(a.id) === desired) continue // lampiran tidak berubah
-      if (!fs.existsSync(a.path)) continue
-      try {
-        await client.createDirectory(desired.slice(0, desired.lastIndexOf('/')), { recursive: true })
-        await client.putFileContents(desired, fs.readFileSync(a.path), {
-          overwrite: true,
-          contentLength: false,
-        })
-        upsertAtt.run(a.id, req.user.id, desired, new Date().toISOString())
-        attachments++
-      } catch (e) {
-        failed.push({ title: a.name, error: e.message })
-      }
-    }
-
-    // ---- lampiran yang sudah dihapus: hapus file remote-nya ----
-    const liveAtt = new Set(attRows.map((a) => a.id))
-    const staleAttDirs = new Set()
-    for (const [attId, remotePath] of attSyncedMap) {
-      if (liveAtt.has(attId)) continue
-      try {
-        await client.deleteFile(remotePath)
-        dropAtt.run(attId)
-        deleted++
-        staleAttDirs.add(remotePath.slice(0, remotePath.lastIndexOf('/')))
-      } catch (e) {
-        failed.push({ title: remotePath, error: e.message })
-      }
-    }
-
-    // ---- bersihkan folder lama yang kini kosong (hanya di bawah base) ----
-    const oldDirs = new Set(staleAttDirs)
-    for (const [, row] of syncedMap) {
-      if (!row.remote_path) continue
-      const d = row.remote_path.slice(0, row.remote_path.lastIndexOf('/'))
-      if (d && d !== base && !desiredDirs.has(d)) oldDirs.add(d)
-    }
-    for (const dir of oldDirs) {
-      try {
-        const items = await client.getDirectoryContents(dir)
-        if (Array.isArray(items) && items.length === 0) await client.deleteFile(dir)
-      } catch {
-        // abaikan kegagalan pembersihan folder
-      }
-    }
-
-    const changed = uploaded + moved + deleted + attachments
-    const parts = [`${uploaded} diunggah`]
-    if (moved) parts.push(`${moved} dipindah`)
-    if (deleted) parts.push(`${deleted} dihapus`)
-    if (attachments) parts.push(`${attachments} lampiran`)
     res.json({
       ok: true,
-      uploaded,
-      moved,
-      deleted,
-      attachments,
-      skipped,
-      failed,
-      path: base,
-      message: changed ? `Sinkron selesai: ${parts.join(', ')}` : 'Semua catatan sudah sinkron',
+      message: `Koneksi Google Drive berhasil${account ? ` (${account})` : ''}`,
     })
   } catch (e) {
-    res.status(502).json({ error: `Sinkronisasi gagal: ${e.message}` })
+    res.status(502).json({ error: `Koneksi gagal: ${e.message}` })
   }
+})
+
+app.post('/api/gdrive/oauth/start', (req, res) => {
+  const stored = getStoredGdrive(req.user.id)
+  if (!stored?.clientId || !stored.clientSecret) {
+    return res.status(400).json({ error: 'Simpan Client ID & Client Secret terlebih dahulu.' })
+  }
+  const state = jwt.sign({ sub: req.user.id, purpose: 'gdrive_oauth' }, JWT_SECRET, {
+    expiresIn: '10m',
+  })
+  const url = buildAuthUrl({
+    clientId: stored.clientId,
+    clientSecret: stored.clientSecret,
+    redirectUri: gdriveRedirectUri(req),
+    state,
+  })
+  res.json({ url })
+})
+
+app.get('/api/gdrive/oauth/callback', async (req, res) => {
+  const back = (query) => `${publicBaseUrl(req)}/${query ? `?${query}` : ''}`
+  try {
+    const code = String(req.query?.code ?? '')
+    const state = String(req.query?.state ?? '')
+    if (!code || !state) return res.redirect(back('gdrive=error'))
+    let payload
+    try {
+      payload = jwt.verify(state, JWT_SECRET)
+    } catch {
+      return res.redirect(back('gdrive=error'))
+    }
+    if (payload?.purpose !== 'gdrive_oauth') return res.redirect(back('gdrive=error'))
+    const stored = getStoredGdrive(payload.sub)
+    if (!stored?.clientId || !stored.clientSecret) return res.redirect(back('gdrive=error'))
+    const tokens = await exchangeCode({
+      clientId: stored.clientId,
+      clientSecret: stored.clientSecret,
+      redirectUri: gdriveRedirectUri(req),
+      code,
+    })
+    if (tokens.refresh_token) {
+      const account = await getDriveAccount({
+        clientId: stored.clientId,
+        clientSecret: stored.clientSecret,
+        refreshToken: tokens.refresh_token,
+      }).catch(() => '')
+      db.prepare(
+        'UPDATE settings SET gdrive_refresh_token = ?, gdrive_account = ?, updated_at = ? WHERE user_id = ?'
+      ).run(encryptSecret(tokens.refresh_token), account, new Date().toISOString(), payload.sub)
+    } else if (!stored.refreshToken) {
+      return res.redirect(back('gdrive=error'))
+    }
+    res.redirect(back('gdrive=connected'))
+  } catch {
+    res.redirect(back('gdrive=error'))
+  }
+})
+
+app.post('/api/gdrive/disconnect', (req, res) => {
+  ensureSettingsRow(req.user.id)
+  db.prepare(
+    "UPDATE settings SET gdrive_refresh_token = '', gdrive_account = '', gdrive_enabled = 0, updated_at = ? WHERE user_id = ?"
+  ).run(new Date().toISOString(), req.user.id)
+  res.json(getStoredGdrivePublic(req.user.id))
+})
+
+app.post('/api/gdrive/sync', async (req, res) => {
+  const result = await runProviderSync(req.user.id, 'gdrive')
+  if (!result.ok) return res.status(result.disabled ? 400 : 502).json(result)
+  res.json(result)
+})
+
+// ---------- sinkron semua provider yang aktif ----------
+app.post('/api/sync', async (req, res) => {
+  const results = []
+  for (const provider of SYNC_PROVIDERS) {
+    const { adapter, error, disabled } = adapterFor(req.user.id, provider)
+    if (disabled) continue
+    if (error) {
+      results.push({ ok: false, provider, error })
+      continue
+    }
+    try {
+      results.push(await reconcileSync({ userId: req.user.id, provider, adapter }))
+    } catch (e) {
+      results.push({ ok: false, provider, error: `Sinkronisasi gagal: ${e.message}` })
+    }
+  }
+  if (!results.length) {
+    return res
+      .status(400)
+      .json({ error: 'Belum ada sinkronisasi yang aktif. Aktifkan di halaman Pengaturan.' })
+  }
+  res.json({
+    ok: results.every((r) => r.ok),
+    results,
+    failed: results.flatMap((r) => (r.failed || []).map((f) => ({ ...f, provider: r.provider }))),
+    message: results
+      .map((r) => `${providerLabel(r.provider)}: ${r.ok ? r.message : r.error}`)
+      .join(' · '),
+  })
 })
 
 // ---------- production static ----------

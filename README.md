@@ -11,7 +11,7 @@ Aplikasi pencatatan teknis (dokumentasi konfigurasi server, SOP, troubleshooting
 - Lampiran file + **paste foto/gambar** langsung ke isi catatan.
 - **Kunci layar otomatis**: setelah 60 detik tanpa aktivitas, layar terkunci dan perlu PIN (yaitu `ADMIN_PASSWORD`) untuk membuka kembali. Durasi diatur lewat `VITE_LOCK_IDLE_SECONDS`.
 - Ekspor Markdown / PDF.
-- Halaman Pengaturan untuk sinkronisasi **Nextcloud via WebDAV** (password WebDAV disimpan terenkripsi AES-256-GCM).
+- Halaman Pengaturan untuk sinkronisasi **Nextcloud (WebDAV)** dan **Google Drive** (kredensial disimpan terenkripsi AES-256-GCM).
 - Responsif (mobile) dan tema terang / gelap.
 
 ## Teknologi
@@ -26,6 +26,7 @@ Aplikasi pencatatan teknis (dokumentasi konfigurasi server, SOP, troubleshooting
 server/         Backend Express + SQLite
   index.js      Server & API routes
   db.js         Schema, migrasi, seed, koneksi SQLite
+  gdrive.js     Adapter sinkronisasi Google Drive
   devnotes.db   Database (gitignored)
   uploads/      File lampiran (gitignored)
 src/            Frontend React
@@ -76,13 +77,14 @@ Aplikasi akan tersedia di `http://localhost:PORT` (default `4000`) — satu port
 | Variabel | Wajib | Default | Keterangan |
 |---|---|---|---|
 | `PORT` | tidak | `4000` | Port untuk server & aplikasi |
-| `JWT_SECRET` | **ya** | (tidak aman) | Kunci penandatanganan JWT & enkripsi password WebDAV. **Wajib diset nilai acak kuat di produksi.** |
+| `JWT_SECRET` | **ya** | (tidak aman) | Kunci penandatanganan JWT & enkripsi kredensial sinkronisasi (WebDAV/Google Drive). **Wajib diset nilai acak kuat di produksi.** |
 | `ADMIN_PASSWORD` | **ya** | `admin123` | Password login aplikasi (satu pengguna). **Segera ganti di produksi.** |
 | `LOGIN_RATE_MAX` | tidak | `10` | Maksimal percobaan login per jendela waktu (per IP). |
 | `LOGIN_RATE_WINDOW_MIN` | tidak | `15` | Jendela waktu rate-limit login (menit). |
 | `TRUST_PROXY` | tidak | `0` | Set `1` jika di belakang reverse-proxy (nginx/Caddy) agar rate-limit membaca IP pengunjung asli. |
 | `DB_PATH` | tidak | `server/devnotes.db` | Path file database SQLite |
 | `UPLOAD_DIR` | tidak | `server/uploads` | Folder penyimpanan lampiran |
+| `APP_BASE_URL` | tidak | (origin request) | URL publik aplikasi, dipakai sebagai redirect URI OAuth Google Drive. Wajib diset bila di belakang reverse-proxy. |
 
 Contoh menjalankan dengan env:
 
@@ -134,7 +136,9 @@ atau dengan **systemd** — pastikan service menjalankan `node server/index.js` 
 3. **Menu template** — dari sidebar tekan *Buat dari Template* untuk membuat catatan dari template terstruktur (server, troubleshooting, SOP, kredensial, catatan teks).
 4. **Editor** — mendukung Markdown; toolbar format, ekspor `.md` / PDF, dan paste gambar. Pilih mode *Edit / Split / Preview*.
 5. **Pencarian cepat** — `Ctrl + K` untuk command palette.
-6. **Sinkronisasi WebDAV** — buka *Pengaturan* (ikon gerigi di sidebar), isi server/username/password WebDAV Nextcloud, lalu tombol *Sinkron*. Catatan disimpan sebagai `.md` ke folder `<path>/[<Folder>/]<judul>.md`. Sinkronisasi mencerminkan perubahan: isi catatan yang berubah di-upload ulang, ganti judul / pindah folder memindahkan file (`MOVE`), serta catatan yang dihapus (beserta lampirannya) ikut dihapus di Nextcloud. Lampiran diunggah ke `<path>/_attachments/<note-id>/`. Tag tidak ikut disinkronkan.
+6. **Sinkronisasi WebDAV / Google Drive** — buka *Pengaturan* (ikon gerigi di sidebar), aktifkan provider dengan checkbox, isi konfigurasi, lalu tombol *Sinkron*. Catatan disimpan sebagai `.md` ke folder `<path>/[<Folder>/]<judul>.md`. Sinkronisasi mencerminkan perubahan: isi catatan yang berubah di-upload ulang, ganti judul / pindah folder memindahkan file (`MOVE`), serta catatan yang dihapus (beserta lampirannya) ikut dihapus. Lampiran diunggah ke `<path>/_attachments/<note-id>/`. Tag tidak ikut disinkronkan. Provider yang tidak dicentang dilewati.
+
+   **Google Drive:** butuh OAuth Client ID & Client Secret dari Google Cloud (aktifkan Google Drive API). Daftarkan **Authorized redirect URI** `https://<domain-anda>/api/gdrive/oauth/callback`, isi `APP_BASE_URL` bila berada di belakang reverse-proxy, lalu klik *Hubungkan ke Google*.
 
 ## Deploy dengan Docker
 
@@ -208,7 +212,7 @@ Lengkapi dengan reverse-proxy nginx/Caddy ke `http://127.0.0.1:4000`.
 - Berkas database: `server/devnotes.db` (+ `-wal`, `-shm`).
 - Lampiran: folder `server/uploads/`.
 - Cadangkan keduanya bersama.
-- Password WebDAV tersimpan terenkripsi di tabel `settings`; jangan hilangkan `JWT_SECRET` atau data tidak bisa didekripsi lagi.
+- Password WebDAV dan kredensial Google Drive (Client Secret + refresh token) tersimpan terenkripsi di tabel `settings`; jangan hilangkan `JWT_SECRET` atau data tidak bisa didekripsi lagi.
 
 ## Perintah tersedia
 

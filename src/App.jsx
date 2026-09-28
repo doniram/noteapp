@@ -98,6 +98,8 @@ function Workspace() {
     setNotesOpen,
     error,
     setError,
+    notice,
+    setNotice,
     loading,
     isMobile,
     sidebarOpen,
@@ -188,12 +190,29 @@ function Workspace() {
           </button>
         </div>
       )}
+      {notice && (
+        <div
+          className={`fixed bottom-4 right-4 z-40 flex items-center gap-2 rounded-lg border px-3 py-2 text-[12px] shadow-xl shadow-black/30 ${
+            notice.ok
+              ? 'border-emerald-800/70 bg-emerald-950/90 text-emerald-300'
+              : 'border-rose-800/70 bg-rose-950/90 text-rose-300'
+          }`}
+        >
+          <span>{notice.text}</span>
+          <button
+            onClick={() => setNotice(null)}
+            className="rounded p-0.5 opacity-70 hover:opacity-100"
+          >
+            ✕
+          </button>
+        </div>
+      )}
     </div>
   )
 }
 
 function SyncButton() {
-  const { syncing, syncResult, syncNextcloud, isMobile, t } = useApp()
+  const { syncing, syncResult, syncAll, isMobile, t } = useApp()
   const expanded = isMobile || syncing
   const [autoHide, setAutoHide] = useState(false)
 
@@ -213,7 +232,7 @@ function SyncButton() {
 
   const handleSync = () => {
     setAutoHide(false)
-    syncNextcloud()
+    syncAll()
   }
 
   return (
@@ -221,7 +240,7 @@ function SyncButton() {
       <button
         onClick={showResult ? () => setAutoHide(true) : handleSync}
         disabled={syncing}
-        title="Sinkronkan semua catatan (.md) ke Nextcloud"
+        title="Sinkronkan semua catatan ke semua provider yang aktif"
         className={`flex h-11 items-center overflow-hidden rounded-full border bg-[#0d141d] shadow-lg shadow-black/40 transition-all duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] ${
           showResult
             ? `min-w-11 max-w-[340px] gap-2 px-4 text-[12px] font-medium leading-snug ${

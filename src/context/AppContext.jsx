@@ -40,8 +40,13 @@ export function AppProvider({ children }) {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [nextcloud, setNextcloud] = useState(null)
+  const [gdrive, setGdrive] = useState(null)
   const [syncing, setSyncing] = useState(false)
   const [syncResult, setSyncResult] = useState(null)
+  const [providerSyncing, setProviderSyncing] = useState(null) // 'webdav' | 'gdrive' | null
+  const [nextcloudSyncResult, setNextcloudSyncResult] = useState(null)
+  const [gdriveSyncResult, setGdriveSyncResult] = useState(null)
+  const [notice, setNotice] = useState(null)
   const [view, setView] = useState('notes') // 'notes' | 'tasks'
   const [isMobile, setIsMobile] = useState(
     () => typeof window !== 'undefined' && window.matchMedia('(max-width: 767px)').matches
@@ -135,20 +140,41 @@ export function AppProvider({ children }) {
     if (!user) return
     ;(async () => {
       try {
-        const [f, t, cfg] = await Promise.all([
+        const [f, t, cfg, gd] = await Promise.all([
           api.getFolders(),
           api.getTags(),
           api.getNextcloudSettings(),
+          api.getGdriveSettings(),
         ])
         setFolders(f)
         setTags(t)
         setNextcloud(cfg)
+        setGdrive(gd)
       } catch (e) {
         setError(e.message)
       } finally {
         setLoading(false)
       }
     })()
+  }, [user])
+
+  // Hasil redirect OAuth Google Drive (?gdrive=connected|error).
+  useEffect(() => {
+    if (!user) return
+    const params = new URLSearchParams(window.location.search)
+    const status = params.get('gdrive')
+    if (!status) return
+    params.delete('gdrive')
+    const qs = params.toString()
+    window.history.replaceState({}, '', window.location.pathname + (qs ? `?${qs}` : ''))
+    if (status === 'connected') {
+      setNotice({ ok: true, text: translate(lang, 'settings.gdriveConnected') })
+      api.getGdriveSettings().then(setGdrive).catch(() => {})
+    } else {
+      setNotice({ ok: false, text: translate(lang, 'settings.gdriveConnectError') })
+    }
+    // sengaja hanya bergantung pada user; status query sudah dihapus dari URL
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user])
 
   // ----- list results on search/filter/sort change -----
@@ -498,14 +524,69 @@ export function AppProvider({ children }) {
   const testNextcloud = (cfg) => api.testNextcloud(cfg)
 
   const syncNextcloud = async () => {
+    setProviderSyncing('webdav')
+    setNextcloudSyncResult(null)
+    try {
+      const res = await api.syncNextcloud()
+      setNextcloudSyncResult(res)
+      return res
+    } catch (e) {
+      const res = { ok: false, error: e.message }
+      setNextcloudSyncResult(res)
+      return res
+    } finally {
+      setProviderSyncing(null)
+    }
+  }
+
+  // ----- google drive -----
+  const saveGdrive = async (cfg) => {
+    const saved = await api.saveGdriveSettings(cfg)
+    setGdrive(saved)
+    return saved
+  }
+
+  const testGdrive = (cfg) => api.testGdrive(cfg)
+
+  const startGdriveOAuth = async () => {
+    const { url } = await api.startGdriveOAuth()
+    window.location.href = url
+  }
+
+  const disconnectGdrive = async () => {
+    const saved = await api.disconnectGdrive()
+    setGdrive(saved)
+    return saved
+  }
+
+  const syncGdrive = async () => {
+    setProviderSyncing('gdrive')
+    setGdriveSyncResult(null)
+    try {
+      const res = await api.syncGdrive()
+      setGdriveSyncResult(res)
+      return res
+    } catch (e) {
+      const res = { ok: false, error: e.message }
+      setGdriveSyncResult(res)
+      return res
+    } finally {
+      setProviderSyncing(null)
+    }
+  }
+
+  // Sinkron semua provider yang aktif (tombol global).
+  const syncAll = async () => {
     setSyncing(true)
     setSyncResult(null)
     try {
-      const res = await api.syncNextcloud()
+      const res = await api.syncAll()
       setSyncResult(res)
       return res
     } catch (e) {
-      setSyncResult({ ok: false, error: e.message })
+      const res = { ok: false, error: e.message }
+      setSyncResult(res)
+      return res
     } finally {
       setSyncing(false)
     }
@@ -569,11 +650,23 @@ export function AppProvider({ children }) {
     settingsOpen,
     setSettingsOpen,
     nextcloud,
+    gdrive,
     syncing,
     syncResult,
+    providerSyncing,
+    nextcloudSyncResult,
+    gdriveSyncResult,
+    notice,
+    setNotice,
     saveNextcloud,
     testNextcloud,
     syncNextcloud,
+    saveGdrive,
+    testGdrive,
+    startGdriveOAuth,
+    disconnectGdrive,
+    syncGdrive,
+    syncAll,
     theme,
     toggleTheme,
     lang,

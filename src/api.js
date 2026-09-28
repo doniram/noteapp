@@ -101,4 +101,12 @@ export const api = {
   saveNextcloudSettings: (cfg) => req('/settings/nextcloud', json('PUT', cfg)),
   testNextcloud: (cfg) => req('/nextcloud/test', json('POST', cfg)),
   syncNextcloud: () => req('/nextcloud/sync', { method: 'POST' }),
+
+  getGdriveSettings: () => req('/settings/gdrive'),
+  saveGdriveSettings: (cfg) => req('/settings/gdrive', json('PUT', cfg)),
+  testGdrive: (cfg) => req('/gdrive/test', json('POST', cfg)),
+  startGdriveOAuth: () => req('/gdrive/oauth/start', { method: 'POST' }),
+  disconnectGdrive: () => req('/gdrive/disconnect', { method: 'POST' }),
+  syncGdrive: () => req('/gdrive/sync', { method: 'POST' }),
+  syncAll: () => req('/sync', { method: 'POST' }),
 }

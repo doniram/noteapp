@@ -70,21 +70,26 @@ CREATE TABLE IF NOT EXISTS settings (
   webdav_username TEXT NOT NULL DEFAULT '',
   webdav_password TEXT NOT NULL DEFAULT '',
   webdav_path TEXT NOT NULL DEFAULT 'DevNotes',
+  webdav_enabled INTEGER NOT NULL DEFAULT 0,
+  gdrive_enabled INTEGER NOT NULL DEFAULT 0,
+  gdrive_client_id TEXT NOT NULL DEFAULT '',
+  gdrive_client_secret TEXT NOT NULL DEFAULT '',
+  gdrive_refresh_token TEXT NOT NULL DEFAULT '',
+  gdrive_account TEXT NOT NULL DEFAULT '',
+  gdrive_folder TEXT NOT NULL DEFAULT 'DevNotes',
   updated_at TEXT NOT NULL
 );
 
-CREATE TABLE IF NOT EXISTS note_sync (
-  note_id TEXT PRIMARY KEY,
-  user_id TEXT NOT NULL DEFAULT '',
+-- State sinkron per provider: 'webdav' | 'gdrive'. remote_path relatif terhadap
+-- folder tujuan; remote_id dipakai Google Drive (WebDAV = NULL).
+CREATE TABLE IF NOT EXISTS sync_files (
+  item_type TEXT NOT NULL,
+  item_id TEXT NOT NULL,
+  provider TEXT NOT NULL,
   remote_path TEXT,
-  synced_at TEXT NOT NULL
-);
-
-CREATE TABLE IF NOT EXISTS attachment_sync (
-  attachment_id TEXT PRIMARY KEY,
-  user_id TEXT NOT NULL DEFAULT '',
-  remote_path TEXT NOT NULL,
-  synced_at TEXT NOT NULL
+  remote_id TEXT,
+  synced_at TEXT NOT NULL,
+  PRIMARY KEY (item_type, item_id, provider)
 );
 
 CREATE TABLE IF NOT EXISTS task_statuses (
@@ -138,7 +143,50 @@ ensureColumn('folders', 'user_id', "TEXT NOT NULL DEFAULT ''")
 ensureColumn('folders', 'icon', "TEXT NOT NULL DEFAULT ''")
 ensureColumn('tags', 'user_id', "TEXT NOT NULL DEFAULT ''")
 ensureColumn('notes', 'user_id', "TEXT NOT NULL DEFAULT ''")
-ensureColumn('note_sync', 'remote_path', 'TEXT')
+// kolom settings untuk multi-provider (webdav + google drive)
+ensureColumn('settings', 'webdav_enabled', 'INTEGER NOT NULL DEFAULT 0')
+ensureColumn('settings', 'gdrive_enabled', 'INTEGER NOT NULL DEFAULT 0')
+ensureColumn('settings', 'gdrive_client_id', "TEXT NOT NULL DEFAULT ''")
+ensureColumn('settings', 'gdrive_client_secret', "TEXT NOT NULL DEFAULT ''")
+ensureColumn('settings', 'gdrive_refresh_token', "TEXT NOT NULL DEFAULT ''")
+ensureColumn('settings', 'gdrive_account', "TEXT NOT NULL DEFAULT ''")
+ensureColumn('settings', 'gdrive_folder', "TEXT NOT NULL DEFAULT 'DevNotes'")
+
+// Backfill sekali jalan: konfigurasi WebDAV yang sudah ada dianggap aktif,
+// supaya setup lama tidak tiba-tiba berhenti sinkron setelah flag enabled ditambah.
+{
+  const version = db.pragma('user_version', { simple: true })
+  if (version < 1) {
+    db.prepare(
+      "UPDATE settings SET webdav_enabled = 1 WHERE webdav_server != '' AND webdav_username != ''"
+    ).run()
+    db.pragma('user_version = 1')
+  }
+}
+
+// Migrasi tabel sinkron lama (satu provider) -> sync_files(per provider).
+{
+  const hasTable = (name) =>
+    db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?").get(name)
+  const legacy = hasTable('note_sync') || hasTable('attachment_sync')
+  if (legacy) {
+    if (hasTable('note_sync')) {
+      ensureColumn('note_sync', 'remote_path', 'TEXT')
+      db.exec(`
+        INSERT OR IGNORE INTO sync_files (item_type, item_id, provider, remote_path, remote_id, synced_at)
+        SELECT 'note', note_id, 'webdav', remote_path, NULL, synced_at FROM note_sync;
+        DROP TABLE note_sync;
+      `)
+    }
+    if (hasTable('attachment_sync')) {
+      db.exec(`
+        INSERT OR IGNORE INTO sync_files (item_type, item_id, provider, remote_path, remote_id, synced_at)
+        SELECT 'attachment', attachment_id, 'webdav', remote_path, NULL, synced_at FROM attachment_sync;
+        DROP TABLE attachment_sync;
+      `)
+    }
+  }
+}
 // tag name uniqueness must be per-user, not global -> rebuild tags table if it still
 // carries the old inline UNIQUE(name) constraint (its autoindex cannot be dropped)
 const hasOldTagIndex = db

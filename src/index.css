@@ -106,6 +106,20 @@ body {
 :root.light .placeholder\:text-slate-700::placeholder { color: #94a3b8; }
 :root.light .placeholder\:text-slate-600::placeholder { color: #94a3b8; }
 
+/* Permukaan berwarna lembut (notifikasi/toast/badge) agar tidak gelap di tema terang */
+:root.light .bg-emerald-950\/90,
+:root.light .bg-emerald-950\/60 { background-color: #ecfdf5; }
+:root.light .bg-rose-950\/90,
+:root.light .bg-rose-950\/60 { background-color: #fff1f2; }
+:root.light .text-emerald-300 { color: #047857; }
+:root.light .text-rose-300 { color: #be123c; }
+:root.light .border-rose-800\/70 { border-color: #fecdd3; }
+:root.light .border-emerald-800\/70 { border-color: #a7f3d0; }
+:root.light .border-slate-800\/80 { border-color: rgb(226 232 240 / 0.9); }
+:root.light .bg-slate-950\/60 { background-color: rgb(255 255 255 / 0.8); }
+:root.light .bg-slate-950 { background-color: #e2e8f0; }
+:root.light .bg-slate-700\/50 { background-color: #cbd5e1; }
+
 /* ---------- Markdown ---------- */
 .markdown-body {
   line-height: 1.7;
